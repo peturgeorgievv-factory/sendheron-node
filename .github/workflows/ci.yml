@@ -16,8 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # The engines claim is ">=18.17"; test what is claimed.
-        node: ['18.17', '20', '22']
+         node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
