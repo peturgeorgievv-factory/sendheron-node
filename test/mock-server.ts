@@ -12,10 +12,14 @@ export interface ScriptedResponse {
   status?: number;
   headers?: Record<string, string>;
   body?: unknown;
-  /** Sent verbatim — for non-JSON responses like an edge/proxy error page. */
+  /** Sent verbatim: for non-JSON responses like an edge/proxy error page. */
   rawBody?: string;
-  /** Destroy the socket instead of responding — a network failure. */
+  /** Destroy the socket instead of responding: a network failure. */
   destroy?: boolean;
+  /** Send headers and half the body, then destroy: a truncated response. */
+  destroyMidBody?: boolean;
+  /** Never respond: a hung upstream. */
+  hang?: boolean;
 }
 
 export interface MockServer {
@@ -54,6 +58,20 @@ export async function startMockServer(
       index++;
 
       if (scripted.destroy) {
+        req.socket.destroy();
+        return;
+      }
+
+      if (scripted.hang) {
+        return;
+      }
+
+      if (scripted.destroyMidBody) {
+        res.writeHead(scripted.status ?? 200, {
+          'content-type': 'application/json',
+          'content-length': '1000',
+        });
+        res.write('{"partial":');
         req.socket.destroy();
         return;
       }

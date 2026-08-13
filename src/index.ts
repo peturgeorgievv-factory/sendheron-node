@@ -25,7 +25,7 @@ export { VERSION } from './version.js';
  *
  * if (error) throw error;                      // 4xx/5xx after retries
  * if (data.status === 'suppressed') {
- *   // refused by the compliance gate — data.errorMessage says why. Never retry.
+ *   // refused by the compliance gate: data.errorMessage says why. Never retry.
  * }
  * ```
  *
@@ -33,7 +33,7 @@ export { VERSION } from './version.js';
  * - retries are ON (2), honoring Retry-After on 429 and backing off on
  *   5xx/network failures;
  * - email sends get an idempotency key automatically, reused across internal
- *   retries — a timeout can never double-send;
+ *   retries: a timeout can never double-send;
  * - API failures are returned as `{ data: null, error }`, never thrown.
  */
 export class SendHeron {

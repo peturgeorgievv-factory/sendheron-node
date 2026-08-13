@@ -12,50 +12,65 @@ import type {
 const serializeSendAt = (sendAt?: Date | string): string | undefined =>
   sendAt instanceof Date ? sendAt.toISOString() : sendAt;
 
-/**
- * A send WITHOUT `sendAt` resolves to the send record; WITH it, to the
- * scheduled email — so the common case needs no narrowing. Callers building
- * payloads dynamically (sendAt maybe-undefined) get the union and narrow on
- * `'status' in data` values.
- */
-type SendResult<P> = P extends { sendAt: Date | string }
-  ? ScheduledEmail
-  : EmailSendRecord;
+type WithSendAt = { sendAt: Date | string };
+type WithoutSendAt = { sendAt?: undefined };
 
 /**
- * The send routes. Every send resolves to a Result whose 201 body is an
- * OUTCOME, not proof of dispatch:
+ * The send routes. A 201 is an OUTCOME, not proof of dispatch:
  *
  * - `data.status === 'sent'`       → accepted by the provider; persist
  *                                    `data.id` and `data.providerMessageId`.
  * - `data.status === 'suppressed'` → the compliance gate refused; the reason
  *                                    is in `data.errorMessage`. Never retry.
  * - `error.statusCode === 503`     → provider failure, attempt recorded;
- *                                    retry with the same idempotency key
- *                                    (the client already did, per maxRetries).
- * - `error.statusCode === 429`     → rate limited; the client honored
- *                                    Retry-After before giving up.
+ *                                    safe to retry with the same key.
+ * - `error.statusCode === 429`     → rate limited; Retry-After was honored
+ *                                    before the client gave up.
  *
- * With `sendAt`, the result is a ScheduledEmail instead.
+ * With `sendAt`, the result is the ScheduledEmail instead.
  */
 export class Emails {
   constructor(private readonly client: HttpClient) {}
 
-  send<P extends SendEmailPayload>(
-    payload: P,
+  send(
+    payload: SendEmailPayload & WithSendAt,
     options?: RequestOptions,
-  ): Promise<Result<SendResult<P>>> {
-    return this.client.post<SendResult<P>>('/api/v1/emails/send', {
+  ): Promise<Result<ScheduledEmail>>;
+  send(
+    payload: SendEmailPayload & WithoutSendAt,
+    options?: RequestOptions,
+  ): Promise<Result<EmailSendRecord>>;
+  send(
+    payload: SendEmailPayload,
+    options?: RequestOptions,
+  ): Promise<Result<EmailSendRecord | ScheduledEmail>>;
+  send(
+    payload: SendEmailPayload,
+    options?: RequestOptions,
+  ): Promise<Result<EmailSendRecord | ScheduledEmail>> {
+    return this.client.post('/api/v1/emails/send', {
       ...payload,
       sendAt: serializeSendAt(payload.sendAt),
     }, options);
   }
 
-  sendTemplate<P extends SendTemplatePayload>(
-    payload: P,
+  sendTemplate(
+    payload: SendTemplatePayload & WithSendAt,
     options?: RequestOptions,
-  ): Promise<Result<SendResult<P>>> {
-    return this.client.post<SendResult<P>>('/api/v1/emails/send-template', {
+  ): Promise<Result<ScheduledEmail>>;
+  sendTemplate(
+    payload: SendTemplatePayload & WithoutSendAt,
+    options?: RequestOptions,
+  ): Promise<Result<EmailSendRecord>>;
+  sendTemplate(
+    payload: SendTemplatePayload,
+    options?: RequestOptions,
+  ): Promise<Result<EmailSendRecord | ScheduledEmail>>;
+  sendTemplate(
+    payload: SendTemplatePayload,
+    options?: RequestOptions,
+  ): Promise<Result<EmailSendRecord | ScheduledEmail>> {
+    return this.client.post('/api/v1/emails/send-template', {
       ...payload,
       sendAt: serializeSendAt(payload.sendAt),
     }, options);
@@ -69,7 +84,7 @@ export class Emails {
   }
 
   /**
-   * Read one send back by the id a send response returned — including the
+   * Read one send back by the id a send response returned: including the
    * delivery lifecycle written later by provider events (deliveredAt,
    * bounced, complainedAt) and open/click counts. Works for recipients who
    * are not contacts.

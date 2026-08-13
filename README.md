@@ -1,6 +1,6 @@
 # sendheron
 
-TypeScript SDK for the [SendHeron](https://sendheron.com) email API — typed
+TypeScript SDK for the [SendHeron](https://sendheron.com) email API: typed
 send outcomes, automatic retries, and idempotency by default.
 
 ```bash
@@ -51,7 +51,7 @@ switch (data.status) {
     // emails.get) and data.providerMessageId.
     break;
   case 'suppressed':
-    // The compliance gate refused — data.errorMessage is a stable reason
+    // The compliance gate refused: data.errorMessage is a stable reason
     // (e.g. 'HARD_SUPPRESSED'). NEVER retry these; surface them.
     break;
 }
@@ -59,23 +59,29 @@ switch (data.status) {
 
 `SEND_BLOCK_REASONS` exports every suppression reason as a typed list.
 
-## Retries and idempotency — on by default
+## Retries and idempotency: on by default
 
-- **429** waits for `Retry-After`, then retries. **5xx and network failures**
-  back off exponentially. Two retries by default; `maxRetries: 0` disables.
+- **429** retries on every method (a rate-limited request was never
+  processed), waiting per `Retry-After`. **5xx, timeouts and network
+  failures** retry with exponential backoff, but only on replay-safe
+  requests: reads, and email sends carrying an idempotency key. Two retries
+  by default; `maxRetries: 0` disables (per call too, via options).
 - Every email send gets an **idempotency key automatically** and reuses it
-  across the SDK's internal retries — a timeout can never double-send, even
-  if you have never heard of the header. Pass your own for business-level
-  dedup across *your* retries:
+  across the SDK's internal retries: a timeout can never double-send, even
+  if you have never heard of the header. A concurrent-duplicate `409
+  requestInProgress` is also retried until the server replays the original
+  response. Pass your own key for business-level dedup across *your*
+  retries:
 
   ```ts
   await sendheron.emails.sendTemplate(payload, { idempotencyKey: `receipt-${orderId}` });
   ```
 
-  Attachment *bytes* are excluded from the server's idempotency fingerprint,
-  so a retried job that regenerated the same PDF replays cleanly.
-- Only retry-safe requests are retried: reads, and writes carrying an
-  idempotency key. Everything else fails fast.
+  If the SDK exhausts its retries, the key it used is on
+  `error.idempotencyKey`: resume the SAME logical send with it instead of
+  minting a new one. Attachment *bytes* are excluded from the server's
+  fingerprint, so a retried job that regenerated the same PDF replays
+  cleanly.
 - API failures are **returned, never thrown**: every call resolves to
   `{ data, error }`.
 
@@ -86,7 +92,7 @@ switch (data.status) {
 sendheron.emails.send(payload)              // raw HTML
 sendheron.emails.sendTemplate(payload)      // templated; sendAt schedules it
 sendheron.emails.sendBulk(payload)          // marketing blast to contacts
-sendheron.emails.get(id)                    // read one send back — delivery
+sendheron.emails.get(id)                    // read one send back: delivery
                                             // lifecycle, opens/clicks
 sendheron.emails.cancelScheduled(id)
 
@@ -105,7 +111,7 @@ sendheron.suppressions.add({ email, note })
 sendheron.suppressions.remove(email, { confirmHardTier: true })
 
 // Usage
-sendheron.usage.get() // pool position + rate ceilings — monitor
+sendheron.usage.get() // pool position + rate ceilings: monitor
                       // monthlySends.transactionalRemaining
 ```
 
@@ -115,22 +121,30 @@ sendheron.usage.get() // pool position + rate ceilings — monitor
 new SendHeron(apiKey, {
   baseUrl: 'https://api.sendheron.com', // default
   maxRetries: 2,                        // default; 0 disables retries
+  timeout: 60_000,                      // per-attempt, in ms
 });
 ```
 
 The key falls back to the `SENDHERON_API_KEY` environment variable.
 Constructing without any key throws; nothing else ever does.
 
+## Coverage
+
+v0 wraps the transactional surface: `emails`, `templates`, `suppressions`,
+`usage`. The remaining API resources (contacts, tags, sequences, sending
+domains, analytics) arrive as minor releases; until then they are one
+[documented HTTP call](https://sendheron.com/docs) away.
+
 ## Requirements
 
-Node.js ≥ 18.17 (native `fetch`). Zero runtime dependencies. Ships ESM and
+Node.js >= 18.17 (native `fetch`). Zero runtime dependencies. Ships ESM and
 CJS with full type declarations.
 
 ## Contract drift protection
 
 `spec/openapi.json` is a snapshot of the live API contract. CI re-fetches the
 (public) live document and fails when they differ, so an API change becomes a
-failing build here — never a surprise in your integration.
+failing build here: never a surprise in your integration.
 
 ## License
 

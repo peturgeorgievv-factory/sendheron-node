@@ -1,9 +1,6 @@
 /**
- * Contract types, hand-written against the SendHeron OpenAPI document.
- *
- * CI pins them: `spec:check` diffs the committed spec snapshot against the
- * live `/api/docs-json`, so a backend contract change fails this repo's build
- * instead of surfacing as a consumer bug.
+ * Contract types for the SendHeron API, pinned by the committed OpenAPI
+ * snapshot in spec/.
  */
 
 /** A template's declared type. Decides suppression and unsubscribe behavior. */
@@ -14,7 +11,7 @@ export type SendStream = 'MARKETING' | 'TRANSACTIONAL';
 
 /**
  * Lifecycle of one send. `suppressed` is an OUTCOME, not an error: the
- * compliance gate refused the send and recorded why — never retry those.
+ * compliance gate refused the send and recorded why: never retry those.
  */
 export type EmailSendStatus =
   | 'queued'
@@ -49,14 +46,14 @@ export type SendBlockReason = (typeof SEND_BLOCK_REASONS)[number];
 export interface EmailSendRecord {
   id: string;
   to: string;
-  /** The RESOLVED sender — not necessarily what you passed. */
+  /** The RESOLVED sender: not necessarily what you passed. */
   from: string | null;
   /** The rendered subject. */
   subject: string;
   templateId?: string | null;
   campaignId?: string | null;
   sequenceStepId?: string | null;
-  /** The provider's message id. Persist it — delivery events correlate on it. */
+  /** The provider's message id. Persist it: delivery events correlate on it. */
   providerMessageId?: string | null;
   provider?: string | null;
   stream?: SendStream | null;
@@ -88,7 +85,7 @@ export type ScheduledEmailStatus =
   | 'SUPPRESSED'
   | 'FAILED';
 
-/** Returned when a send carries `sendAt` — and by `emails.cancelScheduled()`. */
+/** Returned when a send carries `sendAt`: and by `emails.cancelScheduled()`. */
 export interface ScheduledEmail {
   id: string;
   to: string;
@@ -105,7 +102,7 @@ export interface ScheduledEmail {
   contactId?: string | null;
   sendAt: string;
   status: ScheduledEmailStatus;
-  /** Set once dispatched — the send record carrying the outcome. */
+  /** Set once dispatched: the send record carrying the outcome. */
   emailSendLogId?: string | null;
   errorMessage?: string | null;
   organizationId: string;
@@ -118,7 +115,7 @@ export interface ScheduledEmail {
  * Pass-through attachment (SendGrid-compatible shape). Transactional sends
  * only; max 10 per message, 10 MB decoded total, allowlisted MIME types.
  * Bytes are never stored server-side and are excluded from the idempotency
- * fingerprint — a retried request with a regenerated file replays instead of
+ * fingerprint: a retried request with a regenerated file replays instead of
  * conflicting.
  */
 export interface Attachment {
@@ -196,7 +193,6 @@ export interface Template {
   workspaceId: string;
   createdAt?: string;
   updatedAt?: string;
-  [key: string]: unknown;
 }
 
 export interface CreateTemplatePayload {
@@ -206,7 +202,7 @@ export interface CreateTemplatePayload {
   bodyHtml?: string;
   document?: Record<string, unknown>;
   bodyMjml?: string;
-  /** Required — the type decides suppression and unsubscribe behavior. */
+  /** Required: the type decides suppression and unsubscribe behavior. */
   emailType: EmailType;
   tagIds?: string[];
 }
@@ -241,7 +237,7 @@ export interface TemplatePreview {
   appendedPromoBadge: boolean;
   /**
    * The template references {{unsubscribe_url}} but its policy never
-   * supplies it — the link renders EMPTY in a real send.
+   * supplies it: the link renders EMPTY in a real send.
    */
   unsubscribeVariableIgnored: boolean;
 }
@@ -256,7 +252,6 @@ export interface SuppressionEntry {
   workspaceId?: string | null;
   note?: string | null;
   createdAt?: string;
-  [key: string]: unknown;
 }
 
 export interface ChannelDeliverability {
@@ -264,7 +259,7 @@ export interface ChannelDeliverability {
   blockReason: SendBlockReason | null;
 }
 
-/** `suppressions.check()` — the same gate function the send paths run. */
+/** `suppressions.check()`: the same gate function the send paths run. */
 export interface EmailDeliverability {
   email: string;
   suppressed: boolean;
@@ -311,6 +306,7 @@ export interface PaginatedResult<T> {
 }
 
 export interface ListTemplatesParams {
+  /** 0-based. */
   page?: number;
   limit?: number;
   term?: string;
@@ -318,6 +314,7 @@ export interface ListTemplatesParams {
 }
 
 export interface ListSuppressionsParams {
+  /** 0-based. */
   page?: number;
   limit?: number;
   email?: string;

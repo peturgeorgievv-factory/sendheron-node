@@ -1,7 +1,7 @@
 {
   "name": "sendheron",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the SendHeron email API \u2014 typed send outcomes, automatic retries, and idempotency by default.",
+  "description": "TypeScript SDK for the SendHeron email API: typed send outcomes, automatic retries, and idempotency by default.",
   "keywords": [
     "sendheron",
     "email",
@@ -32,11 +32,13 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
   ],
+  "sideEffects": false,
   "engines": {
     "node": ">=18.17"
   },
@@ -55,5 +57,6 @@
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^3.0.0"
-  }
+  },
+  "packageManager": "pnpm@11.16.0"
 }

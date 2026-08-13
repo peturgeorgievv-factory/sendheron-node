@@ -4,7 +4,7 @@
  *
  * `--update` fetches the live OpenAPI document (public, no auth) and commits
  * it as spec/openapi.json. `--check` fetches it again and fails when the live
- * contract differs from the snapshot — which is how a backend API change
+ * contract differs from the snapshot: which is how a backend API change
  * becomes a failing build in THIS repo instead of a bug in a consumer.
  *
  * Zero secrets by design: the spec endpoint is public, so CI needs no token.

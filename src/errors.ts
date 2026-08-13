@@ -1,7 +1,7 @@
 /**
  * One API failure, as a value.
  *
- * The client never throws on API responses — every call resolves to
+ * The client never throws on API responses: every call resolves to
  * `{ data, error }` and this is the `error` half. The only thing that throws
  * is construction with no API key, which is a programming error, not a
  * runtime outcome.
@@ -19,6 +19,12 @@ export class SendHeronError extends Error {
   readonly description?: string;
   /** Seconds until the rate-limit window resets, from Retry-After. */
   readonly retryAfterSeconds?: number;
+  /**
+   * The idempotency key the failed request carried (including an
+   * auto-generated one). Reuse it to resume the SAME logical send after the
+   * client has exhausted its retries: a fresh key could double-send.
+   */
+  idempotencyKey?: string;
 
   constructor(options: {
     statusCode: number | null;

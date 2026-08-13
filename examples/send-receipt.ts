@@ -4,6 +4,7 @@
  *   SENDHERON_API_KEY=ema_live_... npx tsx examples/send-receipt.ts
  */
 import { readFileSync } from 'node:fs';
+// In your app: import { SendHeron } from 'sendheron';
 import { SendHeron } from '../src/index.js';
 
 const sendheron = new SendHeron();

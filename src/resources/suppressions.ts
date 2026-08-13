@@ -18,7 +18,7 @@ export class Suppressions {
   }
 
   /**
-   * "Would we send to this address, and if not, why" — answered per stream
+   * "Would we send to this address, and if not, why": answered per stream
    * by the same gate function the send paths run. A consent-suppressed
    * address still legitimately receives transactional mail.
    */
@@ -29,7 +29,7 @@ export class Suppressions {
     return this.client.get('/api/v1/suppressions/check', { email }, options);
   }
 
-  /** Manually suppress. Only manual reasons — bounce/complaint are recorded by the platform. */
+  /** Manually suppress. Only manual reasons: bounce/complaint are recorded by the platform. */
   add(
     payload: { email: string; reason?: 'manual' | 'admin'; note?: string },
     options?: RequestOptions,
@@ -39,7 +39,7 @@ export class Suppressions {
 
   /**
    * Lift one address. Lifting a bounce/complaint (hard tier) requires
-   * `confirmHardTier: true` — it also clears the provider-side lists.
+   * `confirmHardTier: true`: it also clears the provider-side lists.
    */
   remove(
     email: string,

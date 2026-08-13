@@ -28,7 +28,7 @@ export class Templates {
     );
   }
 
-  /** `emailType` is required — the type decides suppression behavior. */
+  /** `emailType` is required: the type decides suppression behavior. */
   create(
     payload: CreateTemplatePayload,
     options?: RequestOptions,
@@ -38,7 +38,7 @@ export class Templates {
 
   /**
    * Partial update. Changing `emailType` requires
-   * `confirmEmailTypeChange: true` — reclassifying decides which suppression
+   * `confirmEmailTypeChange: true`: reclassifying decides which suppression
    * tiers apply to every future send.
    */
   update(
@@ -53,7 +53,8 @@ export class Templates {
     );
   }
 
-  remove(id: string, options?: RequestOptions): Promise<Result<Template>> {
+  /** Resolves to the API's literal `true` on success. */
+  remove(id: string, options?: RequestOptions): Promise<Result<boolean>> {
     return this.client.delete(
       `/api/v1/templates/${encodeURIComponent(id)}`,
       undefined,
@@ -62,7 +63,7 @@ export class Templates {
   }
 
   /**
-   * Render unsaved content exactly as a send would — including the flags
+   * Render unsaved content exactly as a send would: including the flags
    * that catch authoring hazards (`unsubscribeVariableIgnored`,
    * `hasUnrecognizedUnsubscribeLink`, `injectedUnsubscribeFooter`).
    */
