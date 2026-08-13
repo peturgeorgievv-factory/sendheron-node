@@ -42,6 +42,41 @@ export const SEND_BLOCK_REASONS = [
 
 export type SendBlockReason = (typeof SEND_BLOCK_REASONS)[number];
 
+/**
+ * Refusals caused by the SENDING side: the workspace's own configuration or
+ * state. These are your bugs/setup to fix (alert on them), not facts about
+ * the recipient.
+ */
+export const SENDER_SIDE_BLOCK_REASONS = [
+  'ORG_SENDING_PAUSED',
+  'WORKSPACE_ARCHIVED',
+  'SENDER_DOMAIN_UNVERIFIED',
+  'SENDER_DOMAIN_UNVERIFIED_IN_WORKSPACE',
+  'SENDER_NOT_CONFIGURED',
+] as const satisfies readonly SendBlockReason[];
+
+/**
+ * Refusals that are facts about the RECIPIENT (suppression, opt-out).
+ * Never retry these; surface them.
+ */
+export const RECIPIENT_BLOCK_REASONS = [
+  'HARD_SUPPRESSED',
+  'CONSENT_SUPPRESSED',
+  'CONTACT_HARD_BLOCKED',
+  'CONTACT_UNSUBSCRIBED',
+  'LIST_UNSUBSCRIBED',
+] as const satisfies readonly SendBlockReason[];
+
+/**
+ * True when a suppressed send's `errorMessage` names a sender-side problem.
+ * Unknown/future reasons return false (treated as recipient-side, the
+ * never-retry direction) - update the SDK to pick up new groupings.
+ */
+export const isSenderSideBlock = (
+  reason: string | null | undefined,
+): boolean =>
+  (SENDER_SIDE_BLOCK_REASONS as readonly string[]).includes(reason ?? '');
+
 /** The send record every send route returns and `emails.get()` reads back. */
 export interface EmailSendRecord {
   id: string;
