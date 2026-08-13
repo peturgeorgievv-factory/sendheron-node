@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+- `error.retryable`: whether retrying the same request (same idempotency
+  key) later is sensible. Job runners should fail-permanently when false.
+- `SENDER_SIDE_BLOCK_REASONS`, `RECIPIENT_BLOCK_REASONS` and
+  `isSenderSideBlock(reason)`: the sender-vs-recipient split of suppression
+  reasons, exported so consumers stop hand-rolling the set. Sender-side
+  reasons are your configuration to fix and alert on; recipient-side
+  reasons are facts, never retried. A partition test forces every future
+  reason to be classified deliberately.
+
 ## 0.1.0
 
 Initial release. The migration surface of the SendHeron API:

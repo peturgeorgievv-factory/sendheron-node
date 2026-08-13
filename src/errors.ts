@@ -26,6 +26,23 @@ export class SendHeronError extends Error {
    */
   idempotencyKey?: string;
 
+  /**
+   * Whether retrying the SAME request (same idempotency key) later is
+   * sensible: rate limits, 5xx, timeouts and network failures are; 4xx
+   * request bugs and caller aborts are not. Job runners should
+   * fail-permanently when this is false instead of burning attempts.
+   */
+  get retryable(): boolean {
+    if (this.code === 'aborted') {
+      return false;
+    }
+    return (
+      this.statusCode === null ||
+      this.statusCode === 429 ||
+      this.statusCode >= 500
+    );
+  }
+
   constructor(options: {
     statusCode: number | null;
     code: string;
