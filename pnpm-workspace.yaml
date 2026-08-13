@@ -1,0 +1,7 @@
+packages:
+  - '.'
+
+# esbuild downloads its platform binary in a postinstall script; tsup and
+# vitest are dead without it. Everything else stays script-blocked.
+allowBuilds:
+  esbuild: true

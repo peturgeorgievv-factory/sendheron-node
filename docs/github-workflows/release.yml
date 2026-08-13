@@ -1,0 +1,41 @@
+# Move this file to .github/workflows/release.yml (the bot cannot push that path).
+#
+# Publishing uses npm Trusted Publishing (OIDC): npm trusts THIS workflow via
+# short-lived credentials: no NPM_TOKEN exists anywhere. One-time setup after
+# the first manual publish: npmjs.com -> package -> Settings -> Trusted
+# Publisher -> GitHub Actions -> repo `peturgeorgievv-factory/sendheron-node`,
+# workflow `release.yml`. Requires npm CLI >= 11.5.1. Provenance attestations
+# are generated automatically.
+#
+# Releasing: bump "version" in package.json AND src/version.ts, update
+# CHANGELOG.md, merge, then tag: git tag v0.2.0 && git push --tags
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - name: Tag must match package.json version
+        run: |
+          [ "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}" ] \
+            || { echo "tag ${GITHUB_REF_NAME} != package.json version"; exit 1; }
+      - run: pnpm verify
+      - run: npm publish --access public

@@ -1,0 +1,3376 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/contacts": {
+      "post": {
+        "operationId": "ContactsController_createContact",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContactRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Contact created successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new contact",
+        "tags": [
+          "Contacts"
+        ]
+      },
+      "put": {
+        "operationId": "ContactsController_upsertContact",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertContactRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact upserted successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upsert a contact by email (create or merge)",
+        "tags": [
+          "Contacts"
+        ]
+      },
+      "get": {
+        "operationId": "ContactsController_listContacts",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (zero-based)",
+            "schema": {
+              "minimum": 0,
+              "example": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search by email, first name, or last name",
+            "schema": {
+              "example": "john",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by subscription status",
+            "schema": {
+              "example": "subscribed",
+              "type": "string",
+              "enum": [
+                "subscribed",
+                "unsubscribed",
+                "bounced",
+                "complained"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of contacts"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List contacts with pagination and filtering",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}": {
+      "get": {
+        "operationId": "ContactsController_getContact",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact details"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single contact by ID",
+        "tags": [
+          "Contacts"
+        ]
+      },
+      "patch": {
+        "operationId": "ContactsController_updateContact",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContactRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a contact by ID",
+        "tags": [
+          "Contacts"
+        ]
+      },
+      "delete": {
+        "operationId": "ContactsController_deleteContact",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a contact by ID",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/timeline": {
+      "get": {
+        "operationId": "ContactsController_getContactTimeline",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "minimum": 0,
+              "example": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated engagement timeline"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get engagement timeline for a contact",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/emails": {
+      "get": {
+        "operationId": "ContactsController_getContactEmails",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "minimum": 0,
+              "example": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by status",
+            "schema": {
+              "enum": [
+                "queued",
+                "sent",
+                "delivered",
+                "opened",
+                "clicked",
+                "bounced",
+                "failed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated email send logs"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get email activity for a contact",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/tags": {
+      "post": {
+        "operationId": "ContactsController_addTags",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTagsRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tags added to contact successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add tags to a contact",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/tags/{tagId}": {
+      "delete": {
+        "operationId": "ContactsController_removeTag",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tagId",
+            "required": true,
+            "in": "path",
+            "description": "Tag UUID to remove",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tag removed from contact successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact or tag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a tag from a contact",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/events": {
+      "post": {
+        "operationId": "ContactsController_trackEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackEventRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event tracked successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Contact not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Track a custom event for a contact",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/sequences/{seqId}/enroll": {
+      "post": {
+        "operationId": "ContactsController_enrollInSequence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seqId",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Contact enrolled in sequence successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "Contact or sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enroll a contact in a sequence",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/contacts/{id}/sequences/{seqId}/unenroll": {
+      "delete": {
+        "operationId": "ContactsController_unenrollFromSequence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Contact UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seqId",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact unenrolled from sequence successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "Contact or sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unenroll a contact from a sequence",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/api/v1/sequences": {
+      "get": {
+        "operationId": "SequencesController_listSequences",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (zero-based)",
+            "schema": {
+              "minimum": 0,
+              "example": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search by sequence name",
+            "schema": {
+              "example": "onboarding",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by sequence status",
+            "schema": {
+              "example": "ACTIVE",
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "ACTIVE",
+                "PAUSED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of sequences"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List sequences with pagination and filtering",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/enrollments": {
+      "get": {
+        "operationId": "SequencesController_getSequenceEnrollments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (zero-based)",
+            "schema": {
+              "minimum": 0,
+              "example": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by enrollment status",
+            "schema": {
+              "example": "ACTIVE",
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "COMPLETED",
+                "PAUSED",
+                "FAILED",
+                "CANCELLED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of enrollments"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List enrollments for a sequence (paginated)",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/graph": {
+      "put": {
+        "description": "Whole-graph write: each step config is validated against its type — an unknown key, or a value of the wrong shape, is refused rather than stored, so a step the worker cannot read never reaches the database. Steps are upserted by id (carry the id from GET /sequences/{id}/steps to update a step in place; omit it to create one), edges are replaced wholesale. The graph is validated with the same rules activation enforces, so a shape that could not activate is refused here with the same error keys. Steps that contacts have already passed through are permanent history and cannot be deleted. Removing a true/false branch edge that a CONDITION step had before the write is refused unless allowBranchRemoval is true — a one-branch condition is valid (\"stop here\"), so the loss would otherwise be silent. Only DRAFT and PAUSED sequences can be edited; pause an active sequence first. Pass expectedUpdatedAt to fail with 409 instead of overwriting a concurrent edit. The 200 response includes a diff of what the write changed (steps created/updated/deleted, edges added/removed).",
+        "operationId": "SequencesController_putSequenceGraph",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutSequenceGraphRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved steps and edges, plus a diff of what changed"
+          },
+          "400": {
+            "description": "Invalid graph (same rules as activation), active sequence, unknown ref, type change on an existing step, deleting a step with history, or removing a wired condition branch without allowBranchRemoval"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "Sequence not found"
+          },
+          "409": {
+            "description": "expectedUpdatedAt does not match — concurrent modification"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace the steps and edges of a sequence in one call",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/status": {
+      "patch": {
+        "description": "Activation is refused unless the graph is sound: at least one step, a trigger, no orphaned steps, and every step configured well enough to run. Pausing keeps each enrolled contact exactly where it stands, so activating again continues rather than restarts. A paused sequence still accepts enrollments, it just stops advancing them, which is why a sequence that was paused and forgotten looks healthy from the outside and delivers nothing.",
+        "operationId": "SequencesController_setSequenceStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSequenceStatusRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The sequence in its new status"
+          },
+          "400": {
+            "description": "The graph is not activatable: no steps, no trigger, orphaned steps, or a step whose configuration is incomplete"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "Sequence not found"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate or pause a sequence",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/enrollments/bulk": {
+      "post": {
+        "operationId": "SequencesController_bulkEnrollContacts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkEnrollRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bulk enrollment result with succeeded/failed counts"
+          },
+          "400": {
+            "description": "Sequence not active or validation error"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Sequence not found"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bulk enroll contacts in a sequence",
+        "tags": [
+          "Sequences"
+        ]
+      },
+      "delete": {
+        "operationId": "SequencesController_bulkCancelEnrollments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCancelEnrollmentsRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Number of enrollments cancelled"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bulk cancel enrollments for contacts in a sequence",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/steps": {
+      "get": {
+        "operationId": "SequencesController_getSequenceSteps",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequence steps and edges"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get steps and edges for a sequence",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/step-stats": {
+      "get": {
+        "operationId": "SequencesController_getSequenceStepStats",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-step analytics (executions, email metrics, condition splits)"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get per-step analytics for a sequence",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}/stats": {
+      "get": {
+        "operationId": "SequencesController_getSequenceStats",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequence enrollment stats"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get enrollment stats for a sequence",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/sequences/{id}": {
+      "get": {
+        "operationId": "SequencesController_getSequence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequence details"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single sequence by ID",
+        "tags": [
+          "Sequences"
+        ]
+      }
+    },
+    "/api/v1/emails/send": {
+      "post": {
+        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, or \"suppressed\" with the block reason in errorMessage when the compliance gate refused (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId.",
+        "operationId": "EmailsController_sendEmail",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmailRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The send record — status \"sent\", or \"suppressed\" with the refusal reason in errorMessage. When sendAt is set, the scheduled email instead."
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "409": {
+            "description": "Idempotency conflict — the key is in flight, or was reused with a different payload"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
+          },
+          "503": {
+            "description": "The provider refused the send. The FAILED attempt is recorded; retry with the same idempotency key."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Send a single transactional email",
+        "tags": [
+          "Emails"
+        ]
+      }
+    },
+    "/api/v1/emails/{id}": {
+      "get": {
+        "description": "The record every send response returns, including delivery lifecycle written by provider events (deliveredAt, bounced, complainedAt) and open/click counts. Works for any recipient — transactional recipients are usually not contacts, and this is the read the contact-keyed listing cannot do.",
+        "operationId": "EmailsController_getEmail",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Send id from the send response",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The send record"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "No such send in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read one send by id",
+        "tags": [
+          "Emails"
+        ]
+      }
+    },
+    "/api/v1/emails/scheduled/{id}": {
+      "delete": {
+        "description": "Covers both raw (/emails/send) and templated (/emails/send-template) scheduled sends. Only works while the email is still pending. Once dispatched the mail cannot be recalled, so this returns 400 rather than falsely reporting success.",
+        "operationId": "EmailsController_cancelScheduledEmail",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scheduled email cancelled"
+          },
+          "400": {
+            "description": "Already sent or cancelled"
+          },
+          "404": {
+            "description": "Scheduled email not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel a scheduled email before it sends",
+        "tags": [
+          "Emails"
+        ]
+      }
+    },
+    "/api/v1/emails/send-template": {
+      "post": {
+        "description": "Renders a template with the provided variables and sends it. With sendAt, the template REFERENCE is stored and rendering, the contact merge and every gate run when it fires. A 201 is an OUTCOME: status \"sent\", or \"suppressed\" with the block reason in errorMessage (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key. A template that fails to compile is a 400 (templates.renderFailed). Attachments require a TRANSACTIONAL template.",
+        "operationId": "EmailsController_sendTemplateEmail",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendTemplateEmailRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The send record — status \"sent\", or \"suppressed\" with the refusal reason in errorMessage. When sendAt is set, the scheduled email instead."
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Template or contact not found"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
+          },
+          "503": {
+            "description": "The provider refused the send. The FAILED attempt is recorded; retry with the same idempotency key."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Send an email using a template with dynamic variables",
+        "tags": [
+          "Emails"
+        ]
+      }
+    },
+    "/api/v1/emails/send-bulk": {
+      "post": {
+        "operationId": "EmailsController_sendBulkEmail",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBulkEmailRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bulk email job queued successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Send bulk emails to a list or set of contacts",
+        "tags": [
+          "Emails"
+        ]
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "operationId": "TagsController_listTags",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search by tag name (ILIKE)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of tags"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tags with pagination and search",
+        "tags": [
+          "Tags"
+        ]
+      },
+      "post": {
+        "operationId": "TagsController_createTag",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tag created successfully"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "409": {
+            "description": "Tag with this name already exists"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new tag",
+        "tags": [
+          "Tags"
+        ]
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "operationId": "TemplatesController_listTemplates",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search by template name or subject (ILIKE)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tagIds",
+            "required": false,
+            "in": "query",
+            "description": "Filter by tag IDs (comma-separated or repeated query param)",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "emailType",
+            "required": false,
+            "in": "query",
+            "description": "Filter by declared email type. This is the template tag, not the effective policy — a MARKETING channel overrides a TRANSACTIONAL template at send time.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "MARKETING",
+                "TRANSACTIONAL"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of templates"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List templates with pagination and filtering",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "post": {
+        "operationId": "TemplatesController_createTemplate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new template",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/v1/templates/{id}": {
+      "get": {
+        "operationId": "TemplatesController_getTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Template UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template details"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single template by ID",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "patch": {
+        "operationId": "TemplatesController_updateTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Template UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update an existing template",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "delete": {
+        "operationId": "TemplatesController_deleteTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Template UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template deleted"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a template",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/v1/templates/validate": {
+      "post": {
+        "description": "Returns the list of issues that would refuse this document, and an empty list when it would save. Authoring blocks against a create call means discovering a malformed document as a 400 with one message; this returns every problem at once.",
+        "operationId": "TemplatesController_validateDocument",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateTemplateDocumentRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The issues found, empty when the document is valid"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Check a block document without saving it",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/v1/templates/preview": {
+      "post": {
+        "description": "Composes raw HTML or a block document through the same path a real send uses, so the preview includes what the caller did not author: the unsubscribe block marketing mail gains, and the channel floor that can make a TRANSACTIONAL template marketing anyway. Supply exactly one of bodyHtml or document. The response also flags authoring hazards: injectedUnsubscribeFooter, hasUnrecognizedUnsubscribeLink, and unsubscribeVariableIgnored (the template references {{unsubscribe_url}} but its policy never supplies it, so a real send renders the link empty).",
+        "operationId": "TemplatesController_previewTemplate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewTemplateRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The composed preview"
+          },
+          "400": {
+            "description": "Neither or both of bodyHtml and document were supplied"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Render unsaved content exactly as a send would",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/v1/analytics/dashboard": {
+      "get": {
+        "description": "Rates are percentages derived from real event data. deliveryRate and bounceRate are measured against messages the provider accepted (excluding suppressed and failed sends); openRate, clickRate and complaintRate are measured over delivered, matching the provider dashboard. Any rate is null when its denominator is empty — null means \"no data yet\", which is not the same as 0%. streamPerformance breaks the same metrics down by sending stream (TRANSACTIONAL / MARKETING), so marketing complaint rate and transactional delivery rate are separate numbers; a null stream groups messages sent before streams were tracked.",
+        "operationId": "AnalyticsController_getDashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Dashboard analytics data"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get dashboard analytics (30-day summary, email activity, contact growth)",
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/campaigns/{id}": {
+      "get": {
+        "description": "Same rate definitions as the dashboard endpoint: rates are null until their denominator is non-empty, and suppressed recipients are reported separately rather than counted as attempted sends.",
+        "operationId": "AnalyticsController_getCampaignStats",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Campaign UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign analytics (sent, delivered, opened, clicked, bounced, suppressed, rates)"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Campaign not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get analytics for a specific campaign",
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/api/v1/enrollments/{id}/pause": {
+      "patch": {
+        "operationId": "EnrollmentsController_pauseEnrollment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Enrollment UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrollment paused"
+          },
+          "400": {
+            "description": "Enrollment is not active"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Enrollment not found"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pause an active enrollment",
+        "tags": [
+          "Enrollments"
+        ]
+      }
+    },
+    "/api/v1/enrollments/{id}/resume": {
+      "patch": {
+        "operationId": "EnrollmentsController_resumeEnrollment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Enrollment UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrollment resumed"
+          },
+          "400": {
+            "description": "Enrollment is not paused"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Enrollment not found"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resume a paused enrollment",
+        "tags": [
+          "Enrollments"
+        ]
+      }
+    },
+    "/api/v1/suppressions": {
+      "get": {
+        "description": "Every address the platform will refuse to send to, with reason, source and timestamp. Filterable by tier: HARD (bounce/complaint) blocks every channel including transactional; CONSENT blocks marketing only.",
+        "operationId": "SuppressionsController_listSuppressions",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "email",
+            "required": false,
+            "in": "query",
+            "description": "Search by email (ILIKE)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "one_click",
+                "complaint",
+                "bounce",
+                "admin"
+              ]
+            }
+          },
+          {
+            "name": "tier",
+            "required": false,
+            "in": "query",
+            "description": "HARD (bounce/complaint) blocks every channel including transactional. CONSENT blocks marketing only.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "HARD",
+                "CONSENT"
+              ]
+            }
+          },
+          {
+            "name": "source",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PROVIDER_WEBHOOK",
+                "RECIPIENT",
+                "DASHBOARD",
+                "API",
+                "SYSTEM"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated suppression list"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List suppressed addresses",
+        "tags": [
+          "Suppressions"
+        ]
+      },
+      "post": {
+        "description": "The escape hatch for \"block this address before it becomes a legal complaint\". Only manual reasons are accepted — bounce and complaint are recorded by the platform from provider events, and letting a caller assert them would fabricate a deliverability record that blocks transactional mail.",
+        "operationId": "SuppressionsController_suppressEmail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuppressEmailRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Address suppressed"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Manually suppress an address",
+        "tags": [
+          "Suppressions"
+        ]
+      }
+    },
+    "/api/v1/suppressions/check": {
+      "get": {
+        "description": "Answers per stream, because there is no single correct answer: an address that opted out of marketing still legitimately receives password resets. Evaluated with the same gate the send paths use, so it cannot drift from real behaviour.",
+        "operationId": "SuppressionsController_checkEmail",
+        "parameters": [
+          {
+            "name": "email",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deliverability verdict"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Would we send to this address, and if not, why",
+        "tags": [
+          "Suppressions"
+        ]
+      }
+    },
+    "/api/v1/suppressions/export": {
+      "get": {
+        "description": "Streams the whole org in pages rather than buffering it, so a large list cannot exhaust memory.",
+        "operationId": "SuppressionsController_exportSuppressions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "CSV stream"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Export the full suppression list as CSV",
+        "tags": [
+          "Suppressions"
+        ]
+      }
+    },
+    "/api/v1/suppressions/{email}": {
+      "delete": {
+        "description": "One address per call by design — a bulk form would let a single mistake resurrect an entire bounced list and burn the sending domain. Lifting a bounce or complaint requires confirmHardTier.",
+        "operationId": "SuppressionsController_unsuppressEmail",
+        "parameters": [
+          {
+            "name": "email",
+            "required": true,
+            "in": "path",
+            "description": "Address to unsuppress",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsuppressEmailRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Suppression lifted"
+          },
+          "400": {
+            "description": "Hard-tier suppression requires confirmHardTier"
+          },
+          "404": {
+            "description": "Address is not suppressed"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lift the suppression on one address",
+        "tags": [
+          "Suppressions"
+        ]
+      }
+    },
+    "/api/v1/sending/domains": {
+      "get": {
+        "description": "Each domain carries the DNS records to publish and whether each one is currently valid. A domain must reach VERIFIED before this workspace can send from addresses under it.",
+        "operationId": "SendingDomainsController_listDomains",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The workspace sending domains"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the sending domains authenticated in this workspace",
+        "tags": [
+          "Sending domains"
+        ]
+      },
+      "post": {
+        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, and an ownership challenge TXT record. Publish them, then call verify. The challenge is omitted only when this organization has already verified the same domain in another workspace, in which case the domain is authenticated immediately and needs no DNS at all.",
+        "operationId": "SendingDomainsController_addDomain",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSendingDomainRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The domain and its DNS records"
+          },
+          "409": {
+            "description": "This workspace already has this domain"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a sending domain",
+        "tags": [
+          "Sending domains"
+        ]
+      }
+    },
+    "/api/v1/sending/domains/{domainId}/verify": {
+      "post": {
+        "description": "Safe to call repeatedly while waiting for DNS to propagate, but rate limited to 6 per minute: each call queries the provider and resolves DNS. A domain that was added before ownership challenges were required is issued one here and comes back PENDING with the record to publish, rather than verifying.",
+        "operationId": "SendingDomainsController_verifyDomain",
+        "parameters": [
+          {
+            "name": "domainId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The domain with updated status"
+          },
+          "404": {
+            "description": "No such domain in this workspace"
+          },
+          "429": {
+            "description": "Too many verification attempts — wait and retry"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Check the DNS records and verify the domain",
+        "tags": [
+          "Sending domains"
+        ]
+      }
+    },
+    "/api/v1/sending/domains/{domainId}": {
+      "delete": {
+        "description": "Sends from addresses under this domain stop being permitted, and sequence enrollments relying on it pause rather than fail. Other workspaces that authenticated the same domain keep theirs.",
+        "operationId": "SendingDomainsController_removeDomain",
+        "parameters": [
+          {
+            "name": "domainId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether the domain was removed"
+          },
+          "404": {
+            "description": "No such domain in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a sending domain from this workspace",
+        "tags": [
+          "Sending domains"
+        ]
+      }
+    },
+    "/api/v1/sending/identities": {
+      "get": {
+        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated here), DOMAIN_VERIFIED_ELSEWHERE (this organization authenticated it in another workspace, so adding it here needs no DNS), DOMAIN_PENDING (added here, still waiting on DNS), or DOMAIN_UNVERIFIED (nobody in this organization has authenticated it).",
+        "operationId": "SenderIdentitiesController_listIdentities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The workspace sender identities"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the sender identities in this workspace",
+        "tags": [
+          "Sender identities"
+        ]
+      },
+      "post": {
+        "description": "The first identity in a workspace becomes its default automatically. An address whose domain is not authenticated is accepted and reported as unsendable, so an identity can be prepared while the DNS is still propagating.",
+        "operationId": "SenderIdentitiesController_createIdentity",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertSenderIdentityRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created identity"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a sender identity",
+        "tags": [
+          "Sender identities"
+        ]
+      }
+    },
+    "/api/v1/sending/identities/{identityId}": {
+      "patch": {
+        "description": "Replaces the identity fields. Changing the From address to one on an authenticated domain is itself a remedy: sequence enrollments this workspace parked for want of a verified sender resume as soon as the default identity can send.",
+        "operationId": "SenderIdentitiesController_updateIdentity",
+        "parameters": [
+          {
+            "name": "identityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertSenderIdentityRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated identity"
+          },
+          "404": {
+            "description": "No such identity in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a sender identity",
+        "tags": [
+          "Sender identities"
+        ]
+      },
+      "delete": {
+        "description": "Removes the preset. It does not affect the authenticated domain it sat under, and messages already sent from the address are untouched.",
+        "operationId": "SenderIdentitiesController_deleteIdentity",
+        "parameters": [
+          {
+            "name": "identityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether the identity was deleted"
+          },
+          "404": {
+            "description": "No such identity in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a sender identity",
+        "tags": [
+          "Sender identities"
+        ]
+      }
+    },
+    "/api/v1/sending/identities/{identityId}/default": {
+      "post": {
+        "description": "The default is what every send that names no sender of its own uses, including sequences and campaigns. Exactly one identity per workspace is the default.",
+        "operationId": "SenderIdentitiesController_setDefaultIdentity",
+        "parameters": [
+          {
+            "name": "identityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The identity, now the default"
+          },
+          "404": {
+            "description": "No such identity in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Make this the workspace default sender",
+        "tags": [
+          "Sender identities"
+        ]
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "description": "The organization-wide pool the plan gates enforce: pool size, sends consumed this UTC calendar month, what remains for marketing and for transactional (pool + grace), and when the counter resets. Monitor transactionalRemaining instead of discovering subscription.transactionalGraceExhausted on a password reset. Also reports the API rate ceilings — the same constants the rate-limit guard enforces.",
+        "operationId": "UsageController_getUsage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Plan status, monthly send usage, and rate ceilings"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Monthly send-pool position and rate ceilings",
+        "tags": [
+          "Usage"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SendHeron API",
+    "description": "Public REST API for managing contacts, tags, sequences, templates, suppressions, and email sending.\n\n## Authentication\nAll endpoints require a Bearer token (API key) in the `Authorization` header.\nGenerate API keys from the dashboard under Settings > API Keys.\n\n## Rate Limiting\nTwo one-minute ceilings apply to every request: a per-key limit, and a per-organization limit split by READ / WRITE / SEND so that reads cannot exhaust the sending budget. There is no hourly or daily quota — the multi-window throttler applies to the GraphQL dashboard API, not to this one.\nResponses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`; a `429` also carries `Retry-After`, and its headers name the ceiling (per-key, per-route or per-organization) that refused the request. A `429` never consumes an idempotency key. Current ceilings are readable at `GET /api/v1/usage`.\n\n## Send outcomes\nA `201` from a send route is an outcome, not proof of dispatch: `status` is `sent`, or `suppressed` with the machine-readable block reason in `errorMessage` (never retry those). Provider failures are `503` with the FAILED attempt recorded — retry with the same idempotency key. Anything else 4xx is a request bug.\n\n## Scopes\nAPI keys are scoped to specific permissions. Every scope an endpoint lists is required, and they are not alternatives. Available scopes: `contacts:read`, `contacts:write`, `sequences:read`, `sequences:write`, `templates:read`, `templates:write`, `analytics:read`, `emails:send`, `suppressions:read`, `suppressions:write`, `sending:read`, `sending:write`.",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "API key from Settings > API Keys"
+      }
+    },
+    "schemas": {
+      "CreateContactRestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Contact email address",
+            "example": "john@example.com"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "First name",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Last name",
+            "example": "Doe"
+          },
+          "properties": {
+            "type": "object",
+            "description": "Custom properties as key-value pairs",
+            "example": {
+              "plan": "pro",
+              "company": "Acme"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "Contact subscription status",
+            "enum": [
+              "subscribed",
+              "unsubscribed",
+              "bounced",
+              "complained"
+            ],
+            "example": "subscribed"
+          },
+          "source": {
+            "type": "string",
+            "description": "How the contact was acquired",
+            "enum": [
+              "manual",
+              "import",
+              "api",
+              "form",
+              "sync"
+            ],
+            "example": "api"
+          },
+          "tagIds": {
+            "description": "Tag UUIDs to assign to the contact",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tagNames": {
+            "description": "Tag names to assign (auto-created if they do not exist)",
+            "example": [
+              "newsletter",
+              "vip"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "UpsertContactRestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Contact email — used as the unique key for deduplication"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "description": "Custom properties (JSONB). Merged with existing on update."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "subscribed",
+              "unsubscribed",
+              "bounced",
+              "complained"
+            ],
+            "description": "BOUNCED/UNSUBSCRIBED/COMPLAINED cannot be overwritten to SUBSCRIBED"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "import",
+              "api",
+              "form",
+              "sync"
+            ]
+          },
+          "tagIds": {
+            "description": "Tag UUIDs to add to the contact (merged with existing tags). Alternative: use tagNames.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tagNames": {
+            "description": "Tag names to add (auto-created if not found). Alternative to tagIds.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removeTagNames": {
+            "description": "Tag names to remove from the contact (e.g. clearing superseded lifecycle tags). Never auto-created; a no-op if the contact lacks them.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "UpdateContactRestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Contact email address",
+            "example": "john@example.com"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "First name",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Last name",
+            "example": "Doe"
+          },
+          "properties": {
+            "type": "object",
+            "description": "Custom properties as key-value pairs (merged with existing)",
+            "example": {
+              "plan": "enterprise"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "Contact subscription status. BOUNCED/UNSUBSCRIBED/COMPLAINED cannot be set to SUBSCRIBED",
+            "enum": [
+              "subscribed",
+              "unsubscribed",
+              "bounced",
+              "complained"
+            ],
+            "example": "subscribed"
+          },
+          "source": {
+            "type": "string",
+            "description": "How the contact was acquired",
+            "enum": [
+              "manual",
+              "import",
+              "api",
+              "form",
+              "sync"
+            ],
+            "example": "api"
+          }
+        }
+      },
+      "AddTagsRestDto": {
+        "type": "object",
+        "properties": {
+          "tagIds": {
+            "description": "Tag UUIDs to add. Provide tagIds, tagNames, or both.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tagNames": {
+            "description": "Tag names to add (auto-created if not found). Provide tagIds, tagNames, or both.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TrackEventRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Event name (e.g., \"signup\", \"purchase\", \"trial_started\")"
+          },
+          "properties": {
+            "type": "object",
+            "description": "Event-specific metadata (JSONB)"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GraphStepRestDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "Client-local reference for this step, used by edges. Any short string, unique within the payload.",
+            "example": "welcome-email"
+          },
+          "id": {
+            "type": "string",
+            "description": "Existing step UUID to update in place. Omit to create a new step. Steps that contacts have already passed through cannot be deleted, so repairs should carry existing ids."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "TRIGGER",
+              "SEND_EMAIL",
+              "DELAY",
+              "CONDITION",
+              "ACTION"
+            ]
+          },
+          "config": {
+            "type": "object",
+            "description": "Step configuration. The keys depend on `type`, and a key this step type does not read is REJECTED rather than stored — a config the worker cannot understand used to be accepted silently and simply never run.\n\nTRIGGER: `triggerType` (manual | contact_created | list_added | tag_added | event | webhook), plus `tagId` (UUID) for tag_added, `listId` (UUID) for list_added, `eventName` for event, and an optional `source` filter for contact_created.\nSEND_EMAIL: `templateId` (UUID).\nDELAY: `duration` (positive number) and `unit` (minutes | hours | days). A delay of one week is `{\"duration\": 168, \"unit\": \"hours\"}` or `{\"duration\": 7, \"unit\": \"days\"}` — there is no `days` key.\nCONDITION: `field`, `operator`, and `value` where the operator takes one.\nACTION: `actionType`, plus `tagId` or `tagName` for tag actions, `properties` for property updates, `webhookUrl` (https) for webhooks.\n\nValues are validated here; whether a step is COMPLETE is checked at activation, so a draft may still omit required keys.",
+            "example": {
+              "duration": 168,
+              "unit": "hours"
+            }
+          },
+          "x": {
+            "type": "number",
+            "description": "Canvas X position."
+          },
+          "y": {
+            "type": "number",
+            "description": "Canvas Y position."
+          }
+        },
+        "required": [
+          "ref",
+          "type"
+        ]
+      },
+      "GraphEdgeRestDto": {
+        "type": "object",
+        "properties": {
+          "fromRef": {
+            "type": "string",
+            "description": "Ref of the step this edge leaves."
+          },
+          "toRef": {
+            "type": "string",
+            "description": "Ref of the step this edge enters."
+          },
+          "edgeType": {
+            "type": "string",
+            "enum": [
+              "default",
+              "true",
+              "false"
+            ],
+            "description": "default for linear flow; true/false only from CONDITION steps."
+          }
+        },
+        "required": [
+          "fromRef",
+          "toRef"
+        ]
+      },
+      "PutSequenceGraphRestDto": {
+        "type": "object",
+        "properties": {
+          "expectedUpdatedAt": {
+            "type": "string",
+            "description": "Optimistic concurrency guard: the sequence's updatedAt you last read. A mismatch returns 409 instead of silently overwriting someone else's edit."
+          },
+          "allowBranchRemoval": {
+            "type": "boolean",
+            "description": "Confirm removing a true/false branch edge that a CONDITION step had before this write. Without it such a payload is refused (400 branchRemovalNeedsConfirmation): a one-branch condition is a valid graph (\"stop here\"), so the dropped branch would otherwise take effect silently — contacts taking that outcome just stop. Retargeting a branch (same edgeType, different destination) needs no flag."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphStepRestDto"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphEdgeRestDto"
+            }
+          }
+        },
+        "required": [
+          "steps",
+          "edges"
+        ]
+      },
+      "SetSequenceStatusRestDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "PAUSED"
+            ],
+            "description": "ACTIVE resumes the sequence, and is refused unless the graph is sound: at least one step, a trigger, no orphans, and every step configured well enough to run. PAUSED stops contacts advancing while keeping their position, so resuming continues rather than restarts.",
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "BulkEnrollRestDto": {
+        "type": "object",
+        "properties": {
+          "contactIds": {
+            "description": "Array of contact UUIDs to enroll",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "contactIds"
+        ]
+      },
+      "BulkCancelEnrollmentsRestDto": {
+        "type": "object",
+        "properties": {
+          "contactIds": {
+            "description": "Array of contact UUIDs whose enrollments to cancel",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "contactIds"
+        ]
+      },
+      "EmailAttachmentRestDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "File content, base64-encoded. Bytes are passed straight to the provider and never stored. Deliberately excluded from the idempotency fingerprint: a retried job that regenerates the file (a fresh creation timestamp inside the PDF) replays the original response instead of failing the key with 409."
+          },
+          "filename": {
+            "type": "string",
+            "description": "Filename shown to the recipient.",
+            "example": "receipt-1234.pdf"
+          },
+          "type": {
+            "type": "string",
+            "description": "MIME type. Only allowlisted types are accepted.",
+            "enum": [
+              "application/pdf",
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+              "image/webp",
+              "text/calendar",
+              "text/csv",
+              "text/plain",
+              "application/zip"
+            ],
+            "example": "application/pdf"
+          },
+          "disposition": {
+            "type": "string",
+            "description": "Only \"attachment\" is supported. Present for SendGrid payload compatibility; inline (CID) images are not supported.",
+            "enum": [
+              "attachment"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "filename",
+          "type"
+        ]
+      },
+      "SendEmailRestDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Recipient email address",
+            "example": "recipient@example.com"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line",
+            "example": "Welcome to our platform"
+          },
+          "html": {
+            "type": "string",
+            "description": "Email body as HTML",
+            "example": "<h1>Hello!</h1><p>Welcome aboard.</p>"
+          },
+          "from": {
+            "type": "string",
+            "description": "Sender email address (defaults to org configured sender)",
+            "example": "noreply@yourdomain.com"
+          },
+          "fromName": {
+            "type": "string",
+            "description": "Display name for this send, overriding the sender identity's. The address is what domain verification gates; the name may vary per send (one verified address, several product names). No CR/LF or angle brackets.",
+            "example": "Acme Billing"
+          },
+          "replyTo": {
+            "type": "string",
+            "description": "Reply-To address"
+          },
+          "cc": {
+            "description": "Carbon-copy recipients. Each address is checked against the suppression list independently — a cc is a real delivery.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bcc": {
+            "description": "Blind carbon-copy recipients. Also suppression-checked.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "description": "Custom headers. Headers the platform owns (List-Unsubscribe, authentication, envelope) are rejected rather than dropped.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sendAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Schedule the send for a future time (ISO-8601). Cancel before it fires with DELETE /api/v1/emails/scheduled/{id}. Compliance is evaluated when it fires, not when it is scheduled.",
+            "example": "2026-08-01T09:00:00.000Z"
+          },
+          "attachments": {
+            "description": "Attachments (max 10, 10 MB decoded total, allowlisted MIME types). Transactional sends only — this route always qualifies. Not combinable with sendAt. Bytes are never stored, and are excluded from the idempotency fingerprint.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailAttachmentRestDto"
+            }
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "html"
+        ]
+      },
+      "SendTemplateEmailRestDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Recipient email address",
+            "example": "recipient@example.com"
+          },
+          "templateId": {
+            "type": "string",
+            "description": "Template ID (UUID) to render and send",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "variables": {
+            "type": "object",
+            "description": "Dynamic variables to render into the template (Handlebars/Liquid syntax). If contactId is provided, contact.* variables are auto-populated and merged with these.",
+            "example": {
+              "contact": {
+                "firstName": "Petar",
+                "email": "petar@example.com"
+              },
+              "buttonURL": "https://app.example.com/verify?token=abc"
+            }
+          },
+          "contactId": {
+            "type": "string",
+            "description": "Contact ID (UUID). When provided, auto-populates contact.* template variables (firstName, lastName, email, properties) and guarantees unsubscribe headers.",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Override the template subject line. Supports Handlebars/Liquid syntax with the same variables.",
+            "example": "Welcome, {{ contact.firstName }}!"
+          },
+          "from": {
+            "type": "string",
+            "description": "Sender email address (defaults to org configured sender)",
+            "example": "noreply@yourdomain.com"
+          },
+          "fromName": {
+            "type": "string",
+            "description": "Display name for this send, overriding the sender identity's. The address is what domain verification gates; the name may vary per send. No CR/LF or angle brackets.",
+            "example": "Acme Billing"
+          },
+          "replyTo": {
+            "type": "string",
+            "description": "Reply-to email address",
+            "example": "support@yourdomain.com"
+          },
+          "cc": {
+            "description": "Carbon-copy recipients. Each address is checked against the suppression list independently — a cc is a real delivery, and a blocked copy is dropped without failing the message.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bcc": {
+            "description": "Blind carbon-copy recipients. Also suppression-checked.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sendAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Schedule the send for a future time (ISO-8601). The template is rendered and compliance is evaluated when it fires, not when it is scheduled. Cancel before it fires with DELETE /api/v1/emails/scheduled/{id}.",
+            "example": "2026-08-01T09:00:00.000Z"
+          },
+          "attachments": {
+            "description": "Attachments (max 10, 10 MB decoded total, allowlisted MIME types). Only allowed when the template is TRANSACTIONAL. Not combinable with sendAt. Bytes are never stored, and are excluded from the idempotency fingerprint.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailAttachmentRestDto"
+            }
+          }
+        },
+        "required": [
+          "to",
+          "templateId"
+        ]
+      },
+      "SendBulkEmailRestDto": {
+        "type": "object",
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "description": "UUID of the email template to use",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "from": {
+            "type": "string",
+            "description": "Sender email address (defaults to org configured sender)",
+            "example": "noreply@yourdomain.com"
+          },
+          "sampleData": {
+            "type": "object",
+            "description": "Sample data for template variable previewing",
+            "example": {
+              "firstName": "John",
+              "company": "Acme"
+            }
+          },
+          "listId": {
+            "type": "string",
+            "description": "UUID of a list to send to (all contacts in the list)",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "contactIds": {
+            "description": "Specific contact UUIDs to send to",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440002"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sendToAll": {
+            "type": "boolean",
+            "description": "Send to all contacts in the organization",
+            "example": false
+          }
+        },
+        "required": [
+          "templateId"
+        ]
+      },
+      "CreateTagRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tag name (must be unique per organization)"
+          },
+          "color": {
+            "type": "string",
+            "description": "Tag color (hex or name)"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ValidateTemplateDocumentRestDto": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "object",
+            "description": "The block document to check. Returns the issues that would refuse it, empty when it would save.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "document"
+        ]
+      },
+      "PreviewTemplateRestDto": {
+        "type": "object",
+        "properties": {
+          "bodyHtml": {
+            "type": "string",
+            "description": "Raw HTML to preview. Supply exactly one of bodyHtml or document.",
+            "example": "<h1>Hello {{contact.firstName}}</h1>"
+          },
+          "document": {
+            "type": "object",
+            "description": "Block document to compile and preview. Schema: docs/template-document.md.",
+            "additionalProperties": true
+          },
+          "emailType": {
+            "type": "string",
+            "description": "Template type to preview as. Decides whether the preview carries an unsubscribe block.",
+            "enum": [
+              "MARKETING",
+              "TRANSACTIONAL"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "description": "Channel to preview through. A channel can only tighten the policy, never loosen it: CAMPAIGN and BULK are always marketing whatever the template says, so previewing through one shows the unsubscribe block a TRANSACTIONAL template would still gain.",
+            "enum": [
+              "CAMPAIGN",
+              "BULK",
+              "SEQUENCE",
+              "DIRECT",
+              "TRANSACTIONAL_API"
+            ]
+          },
+          "sampleData": {
+            "type": "object",
+            "description": "Values for the Handlebars variables, so the preview renders with real-looking content instead of empty placeholders.",
+            "additionalProperties": true,
+            "example": {
+              "contact": {
+                "firstName": "Ada"
+              }
+            }
+          }
+        }
+      },
+      "CreateTemplateRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Template name",
+            "example": "Welcome Email"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line",
+            "example": "Welcome to {{contact.firstName}}!"
+          },
+          "bodyHtml": {
+            "type": "string",
+            "description": "HTML body, for a raw-HTML template (supports Handlebars variables). Supply exactly one of bodyHtml or document — sending both is refused rather than one silently winning.",
+            "example": "<h1>Hello {{contact.firstName}}</h1>"
+          },
+          "document": {
+            "type": "object",
+            "description": "Block document, for a builder template. The server validates it and compiles bodyHtml from it, so the compiled HTML is always exactly what the blocks say — you cannot send bodyHtml alongside it. Schema and block reference: docs/template-document.md. Validate one without saving via POST /api/v1/templates/validate.",
+            "additionalProperties": true,
+            "example": {
+              "version": 1,
+              "settings": {
+                "contentWidth": 600,
+                "backgroundColor": "#f4f4f5"
+              },
+              "blocks": [
+                {
+                  "id": "b1",
+                  "type": "heading",
+                  "text": "Hello {{contact.firstName}}",
+                  "level": 1
+                },
+                {
+                  "id": "b2",
+                  "type": "text",
+                  "html": "Thanks for joining."
+                },
+                {
+                  "id": "b3",
+                  "type": "button",
+                  "label": "Open",
+                  "href": "https://example.com"
+                }
+              ]
+            }
+          },
+          "bodyMjml": {
+            "type": "string",
+            "description": "MJML source (optional)"
+          },
+          "emailType": {
+            "type": "string",
+            "description": "Email type. Required — the type decides suppression behavior and unsubscribe handling, so it must be declared, never defaulted: a password-reset template that silently became MARKETING would be blocked for exactly the users who unsubscribed and most need it.",
+            "enum": [
+              "MARKETING",
+              "TRANSACTIONAL"
+            ]
+          },
+          "tagIds": {
+            "description": "Tag IDs to associate with this template",
+            "example": [
+              "uuid1",
+              "uuid2"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "subject",
+          "emailType"
+        ]
+      },
+      "UpdateTemplateRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Template name",
+            "example": "Welcome Email v2"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line",
+            "example": "Welcome!"
+          },
+          "bodyHtml": {
+            "type": "string",
+            "description": "HTML body (supports Handlebars variables)"
+          },
+          "document": {
+            "type": "object",
+            "description": "Block document. An object recompiles the template from it, entering or staying in builder mode. An explicit null EJECTS to raw HTML: the document is dropped and the last compiled bodyHtml becomes editable. Omitting the field leaves the mode alone — and editing bodyHtml directly on a builder template is refused until it is ejected, so the blocks and the HTML can never disagree.",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "bodyMjml": {
+            "type": "string",
+            "description": "MJML source (optional)"
+          },
+          "emailType": {
+            "type": "string",
+            "description": "Email type — MARKETING or TRANSACTIONAL",
+            "enum": [
+              "MARKETING",
+              "TRANSACTIONAL"
+            ]
+          },
+          "tagIds": {
+            "description": "Tag IDs to associate (replaces existing tags)",
+            "example": [
+              "uuid1"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmEmailTypeChange": {
+            "type": "boolean",
+            "description": "Required whenever emailType actually changes. Reclassifying a template is a compliance event — TRANSACTIONAL to MARKETING makes its sends consent-suppressible, the reverse strips unsubscribe handling — so a type change without this flag returns 400 (templates.emailTypeChangeNeedsConfirmation)."
+          }
+        }
+      },
+      "SuppressEmailRestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "admin"
+            ],
+            "default": "manual",
+            "description": "Manual suppression reasons only. Bounce and complaint are recorded by the platform from provider events and cannot be set through this endpoint — accepting them would let a caller fabricate a deliverability record that blocks transactional mail."
+          },
+          "note": {
+            "type": "string",
+            "description": "Why this address is being suppressed. Shown to support."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "UnsuppressEmailRestDto": {
+        "type": "object",
+        "properties": {
+          "confirmHardTier": {
+            "type": "boolean",
+            "description": "Required to lift a bounce or complaint suppression. Those are deliverability facts, not preferences — re-mailing the address risks the sending domain, so it takes a deliberate acknowledgement."
+          },
+          "note": {
+            "type": "string",
+            "description": "Why this suppression is being lifted."
+          }
+        }
+      },
+      "AddSendingDomainRestDto": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "The domain to authenticate, without scheme or path. Case and a trailing dot are normalized away. Authenticating a domain covers every address under it, including subdomains.",
+            "example": "mail.acme.com"
+          }
+        },
+        "required": [
+          "domain"
+        ]
+      },
+      "UpsertSenderIdentityRestDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Human label shown when picking a sender.",
+            "example": "Acme Billing"
+          },
+          "fromEmail": {
+            "type": "string",
+            "description": "The From address. Accepted whatever its domain, and reported as unsendable until that domain is authenticated in this workspace — so an identity can be prepared before the DNS is in place.",
+            "example": "billing@acme.com"
+          },
+          "fromName": {
+            "type": "string",
+            "description": "Display name recipients see beside the address.",
+            "example": "Acme Billing"
+          },
+          "replyToEmail": {
+            "type": "string",
+            "description": "Where replies go, when that differs from the From address. Its domain does not have to be authenticated.",
+            "example": "support@acme.com"
+          }
+        },
+        "required": [
+          "label",
+          "fromEmail"
+        ]
+      }
+    }
+  }
+}
