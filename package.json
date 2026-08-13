@@ -1,0 +1,59 @@
+{
+  "name": "sendheron",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the SendHeron email API \u2014 typed send outcomes, automatic retries, and idempotency by default.",
+  "keywords": [
+    "sendheron",
+    "email",
+    "transactional",
+    "email-api",
+    "sdk"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peturgeorgievv-factory/sendheron-node.git"
+  },
+  "homepage": "https://sendheron.com",
+  "bugs": {
+    "url": "https://github.com/peturgeorgievv-factory/sendheron-node/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "spec:update": "node scripts/spec.mjs --update",
+    "spec:check": "node scripts/spec.mjs --check",
+    "verify": "pnpm typecheck && pnpm build && pnpm test",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}
