@@ -137,8 +137,9 @@ domains, analytics) arrive as minor releases; until then they are one
 
 ## Requirements
 
-Node.js >= 18.17 (native `fetch`). Zero runtime dependencies. Ships ESM and
-CJS with full type declarations.
+Node.js >= 20 (native `fetch`, ES2022 output). CI exercises Node 22 and 24,
+the maintained lines. Zero runtime dependencies. Ships ESM and CJS with full
+type declarations.
 
 ## Contract drift protection
 
