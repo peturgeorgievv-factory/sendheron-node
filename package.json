@@ -50,7 +50,8 @@
     "spec:update": "node scripts/spec.mjs --update",
     "spec:check": "node scripts/spec.mjs --check",
     "verify": "pnpm typecheck && pnpm build && pnpm test",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "e2e": "node scripts/e2e.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
