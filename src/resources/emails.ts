@@ -48,10 +48,14 @@ export class Emails {
     payload: SendEmailPayload,
     options?: RequestOptions,
   ): Promise<Result<EmailSendRecord | ScheduledEmail>> {
-    return this.client.post('/api/v1/emails/send', {
-      ...payload,
-      sendAt: serializeSendAt(payload.sendAt),
-    }, options);
+    return this.client.post(
+      '/api/v1/emails/send',
+      {
+        ...payload,
+        sendAt: serializeSendAt(payload.sendAt),
+      },
+      options,
+    );
   }
 
   sendTemplate(
@@ -70,10 +74,14 @@ export class Emails {
     payload: SendTemplatePayload,
     options?: RequestOptions,
   ): Promise<Result<EmailSendRecord | ScheduledEmail>> {
-    return this.client.post('/api/v1/emails/send-template', {
-      ...payload,
-      sendAt: serializeSendAt(payload.sendAt),
-    }, options);
+    return this.client.post(
+      '/api/v1/emails/send-template',
+      {
+        ...payload,
+        sendAt: serializeSendAt(payload.sendAt),
+      },
+      options,
+    );
   }
 
   sendBulk(

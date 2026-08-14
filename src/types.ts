@@ -72,9 +72,7 @@ export const RECIPIENT_BLOCK_REASONS = [
  * Unknown/future reasons return false (treated as recipient-side, the
  * never-retry direction) - update the SDK to pick up new groupings.
  */
-export const isSenderSideBlock = (
-  reason: string | null | undefined,
-): boolean =>
+export const isSenderSideBlock = (reason: string | null | undefined): boolean =>
   (SENDER_SIDE_BLOCK_REASONS as readonly string[]).includes(reason ?? '');
 
 /** The send record every send route returns and `emails.get()` reads back. */

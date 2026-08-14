@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isSenderSideBlock,
   RECIPIENT_BLOCK_REASONS,
   SEND_BLOCK_REASONS,
   SENDER_SIDE_BLOCK_REASONS,
   SendHeronError,
-  isSenderSideBlock,
 } from '../src/index.js';
 
 describe('block reason groupings', () => {

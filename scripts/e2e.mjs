@@ -17,8 +17,7 @@
  */
 import { exit } from 'node:process';
 
-const BASE_URL =
-  process.env.SENDHERON_E2E_BASE_URL ?? 'http://localhost:5400';
+const BASE_URL = process.env.SENDHERON_E2E_BASE_URL ?? 'http://localhost:5400';
 const API_KEY = process.env.SENDHERON_E2E_API_KEY;
 const SIMULATOR_SUCCESS = 'success@simulator.amazonses.com';
 
@@ -68,7 +67,11 @@ const record = (name, ok, detail) => {
     subject: 's',
     bodyHtml: '<p>x</p>',
   });
-  record('create without emailType is 400', error?.statusCode === 400, error?.code);
+  record(
+    'create without emailType is 400',
+    error?.statusCode === 400,
+    error?.code,
+  );
 }
 
 // create a TRANSACTIONAL template
@@ -125,7 +128,11 @@ let sendId;
     (data.status === 'sent'
       ? !!data.providerMessageId
       : data.status === 'suppressed' && !!data.errorMessage);
-  record('send outcome', ok, error?.code ?? `${data?.status}/${data?.errorMessage ?? ''}`);
+  record(
+    'send outcome',
+    ok,
+    error?.code ?? `${data?.status}/${data?.errorMessage ?? ''}`,
+  );
 }
 
 // read the send back by id

@@ -53,8 +53,7 @@ export async function startMockServer(
         body,
       });
 
-      const scripted =
-        responses[Math.min(index, responses.length - 1)] ?? {};
+      const scripted = responses[Math.min(index, responses.length - 1)] ?? {};
       index++;
 
       if (scripted.destroy) {

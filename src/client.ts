@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { SendHeronError, type Result } from './errors.js';
+import { type Result, SendHeronError } from './errors.js';
 import { VERSION } from './version.js';
 
 export interface ClientOptions {

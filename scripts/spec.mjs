@@ -9,7 +9,7 @@
  *
  * Zero secrets by design: the spec endpoint is public, so CI needs no token.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { argv, exit } from 'node:process';
 
 const SPEC_URL = 'https://api.sendheron.com/api/docs-json';

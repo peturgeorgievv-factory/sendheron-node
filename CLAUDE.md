@@ -56,7 +56,8 @@ path the SDK calls.
 
 ## Gates
 
-- `pnpm verify` = typecheck + build + test. Run before every push.
+- `pnpm verify` = lint (biome) + typecheck + build + test. Run before
+  every push. `pnpm format` applies fixes.
 - Unit tests use a REAL local HTTP server per test, never fetch stubs: the
   behavior under test (retries, idempotency headers, truncation) lives at
   the socket.
