@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { SendHeron, SendHeronError } from '../src/index.js';
-import { startMockServer, type MockServer } from './mock-server.js';
+import { type MockServer, startMockServer } from './mock-server.js';
 
 const KEY = 'ema_live_test_key';
 const UUID_PATTERN =
@@ -68,7 +68,10 @@ describe('send outcomes', () => {
     });
 
     expect(error).toBeNull();
-    expect(data).toMatchObject({ status: 'sent', providerMessageId: 'ses-123' });
+    expect(data).toMatchObject({
+      status: 'sent',
+      providerMessageId: 'ses-123',
+    });
   });
 
   it('passes a suppressed 201 through as DATA, not an error', async () => {
@@ -462,7 +465,10 @@ describe('review-pinned behaviors', () => {
     server = await startMockServer([
       {
         status: 429,
-        body: { statusCode: 429, message: 'Rate limit exceeded. Try again later.' },
+        body: {
+          statusCode: 429,
+          message: 'Rate limit exceeded. Try again later.',
+        },
       },
     ]);
 
@@ -535,7 +541,10 @@ describe('review-pinned behaviors', () => {
 
   it('exhausts exactly maxRetries+1 attempts and exposes the idempotency key for resume', async () => {
     server = await startMockServer([
-      { status: 503, body: { statusCode: 503, message: 'emailSending.sendFailed' } },
+      {
+        status: 503,
+        body: { statusCode: 503, message: 'emailSending.sendFailed' },
+      },
     ]);
 
     const { error } = await build(2).emails.send({
@@ -590,12 +599,17 @@ describe('review-pinned behaviors', () => {
 
   it('sendBulk auto-arms an idempotency key too', async () => {
     server = await startMockServer([
-      { status: 201, body: { batchId: 'b', totalRecipients: 1, queued: 1, blocked: 0 } },
+      {
+        status: 201,
+        body: { batchId: 'b', totalRecipients: 1, queued: 1, blocked: 0 },
+      },
     ]);
 
     await build().emails.sendBulk({ templateId: 't-1', sendToAll: true });
 
-    expect(server.requests[0]!.headers['idempotency-key']).toMatch(UUID_PATTERN);
+    expect(server.requests[0]!.headers['idempotency-key']).toMatch(
+      UUID_PATTERN,
+    );
   });
 
   it('an empty body resolves to null data', async () => {

@@ -1,11 +1,11 @@
-import { HttpClient, type ClientOptions } from './client.js';
+import { type ClientOptions, HttpClient } from './client.js';
 import { Emails } from './resources/emails.js';
-import { Templates } from './resources/templates.js';
 import { Suppressions } from './resources/suppressions.js';
+import { Templates } from './resources/templates.js';
 import { Usage } from './resources/usage.js';
 
 export type { ClientOptions, RequestOptions } from './client.js';
-export { SendHeronError, type Result } from './errors.js';
+export { type Result, SendHeronError } from './errors.js';
 export * from './types.js';
 export { VERSION } from './version.js';
 

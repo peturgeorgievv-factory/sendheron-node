@@ -8,9 +8,8 @@ import { SendHeron } from '../src/index.js';
 
 const sendheron = new SendHeron();
 
-const { data: verdict, error } = await sendheron.suppressions.check(
-  'user@example.com',
-);
+const { data: verdict, error } =
+  await sendheron.suppressions.check('user@example.com');
 if (error) {
   console.error(`check failed (${error.statusCode}): ${error.code}`);
   process.exit(1);

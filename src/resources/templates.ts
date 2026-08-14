@@ -78,6 +78,10 @@ export class Templates {
     document: Record<string, unknown>,
     options?: RequestOptions,
   ): Promise<Result<{ valid: boolean; issues: string[] }>> {
-    return this.client.post('/api/v1/templates/validate', { document }, options);
+    return this.client.post(
+      '/api/v1/templates/validate',
+      { document },
+      options,
+    );
   }
 }
