@@ -664,7 +664,12 @@ describe('request shaping', () => {
       {
         status: 200,
         body: {
-          plan: { status: 'UNLIMITED', name: null },
+          plan: {
+            status: 'UNLIMITED',
+            name: null,
+            trialEndsAt: null,
+            lapsedReason: null,
+          },
           monthlySends: {
             used: 766,
             pool: null,
@@ -673,6 +678,7 @@ describe('request shaping', () => {
             transactionalRemaining: null,
             resetsAt: '2026-09-01T00:00:00.000Z',
           },
+          contacts: { subscribed: 4120, cap: null, remaining: null },
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -685,6 +691,80 @@ describe('request shaping', () => {
 
     expect(data!.plan.status).toBe('UNLIMITED');
     expect(data!.monthlySends.pool).toBeNull();
+    expect(data!.contacts.subscribed).toBe(4120);
+    expect(data!.contacts.cap).toBeNull();
     expect(data!.rateLimits.organizationPerMinute.SEND).toBe(200);
+  });
+
+  it('reads the trial deadline and the contact cap on a trialing plan', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'ACTIVE',
+            name: 'Starter',
+            trialEndsAt: '2026-09-29T12:00:00.000Z',
+            lapsedReason: null,
+          },
+          monthlySends: {
+            used: 40,
+            pool: 500,
+            marketingRemaining: 460,
+            transactionalCeiling: 550,
+            transactionalRemaining: 510,
+            resetsAt: '2026-10-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 180, cap: 500, remaining: 320 },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    expect(data!.plan.trialEndsAt).toBe('2026-09-29T12:00:00.000Z');
+    expect(data!.plan.lapsedReason).toBeNull();
+    expect(data!.contacts.remaining).toBe(320);
+  });
+
+  it('reads why a lapsed plan is refused', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'LAPSED',
+            name: null,
+            trialEndsAt: null,
+            lapsedReason: 'TRIAL_EXPIRED',
+          },
+          monthlySends: {
+            used: 12,
+            pool: 0,
+            marketingRemaining: 0,
+            transactionalCeiling: 0,
+            transactionalRemaining: 0,
+            resetsAt: '2026-10-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 90, cap: 0, remaining: 0 },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    // Never paid: the transactional grace is gone too, so the ceiling is 0
+    // rather than the smallest plan's pool.
+    expect(data!.plan.lapsedReason).toBe('TRIAL_EXPIRED');
+    expect(data!.monthlySends.transactionalCeiling).toBe(0);
+    expect(data!.contacts.cap).toBe(0);
   });
 });
