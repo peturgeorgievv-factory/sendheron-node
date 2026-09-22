@@ -2429,12 +2429,12 @@
     },
     "/api/v1/usage": {
       "get": {
-        "description": "The organization-wide pool the plan gates enforce: pool size, sends consumed this UTC calendar month, what remains for marketing and for transactional (pool + grace), and when the counter resets. Monitor transactionalRemaining instead of discovering subscription.transactionalGraceExhausted on a password reset. Also reports the API rate ceilings — the same constants the rate-limit guard enforces.",
+        "description": "The organization-wide pool the plan gates enforce: pool size, sends consumed this UTC calendar month, what remains for marketing and for transactional (pool + grace), when the counter resets, and the contact cap against subscribed contacts. plan.trialEndsAt is set while the plan is still trialing (the trial ceilings apply until then); plan.lapsedReason says why a LAPSED organization is refused: NEVER_SUBSCRIBED, TRIAL_EXPIRED (nothing was ever paid, so no transactional grace either), PAYMENT_FAILED (Stripe is retrying the charge) or CANCELED. Monitor this instead of discovering the trial ended, or the charge failed, from a send failing. Also reports the API rate ceilings — the same constants the rate-limit guard enforces.",
         "operationId": "UsageController_getUsage",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Plan status, monthly send usage, and rate ceilings"
+            "description": "Plan position (status, name, trialEndsAt, lapsedReason), monthly send usage, contact usage, and rate ceilings"
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"
@@ -2454,7 +2454,7 @@
   },
   "info": {
     "title": "SendHeron API",
-    "description": "Public REST API for managing contacts, tags, sequences, templates, suppressions, and email sending.\n\n## Authentication\nAll endpoints require a Bearer token (API key) in the `Authorization` header.\nGenerate API keys from the dashboard under Settings > API Keys.\n\n## Rate Limiting\nTwo one-minute ceilings apply to every request: a per-key limit, and a per-organization limit split by READ / WRITE / SEND so that reads cannot exhaust the sending budget. There is no hourly or daily quota — the multi-window throttler applies to the GraphQL dashboard API, not to this one.\nResponses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`; a `429` also carries `Retry-After`, and its headers name the ceiling (per-key, per-route or per-organization) that refused the request. A `429` never consumes an idempotency key. Current ceilings are readable at `GET /api/v1/usage`.\n\n## Send outcomes\nA `201` from a send route is an outcome, not proof of dispatch: `status` is `sent`, or `suppressed` with the machine-readable block reason in `errorMessage` (never retry those). Provider failures are `503` with the FAILED attempt recorded — retry with the same idempotency key. Anything else 4xx is a request bug.\n\n## Scopes\nAPI keys are scoped to specific permissions. Every scope an endpoint lists is required, and they are not alternatives. Available scopes: `contacts:read`, `contacts:write`, `sequences:read`, `sequences:write`, `templates:read`, `templates:write`, `analytics:read`, `emails:send`, `suppressions:read`, `suppressions:write`, `sending:read`, `sending:write`.",
+    "description": "Public REST API for managing contacts, tags, sequences, enrollments, templates, emails, suppressions, sending domains and identities, analytics, and usage.\n\n## Authentication\nAll endpoints require a Bearer token (API key) in the `Authorization` header.\nGenerate API keys from the dashboard under Settings > API Keys.\n\n## Rate Limiting\nTwo one-minute ceilings apply to every request: a per-key limit, and a per-organization limit split by READ / WRITE / SEND so that reads cannot exhaust the sending budget. There is no hourly or daily quota — the multi-window throttler applies to the GraphQL dashboard API, not to this one.\nResponses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`; a `429` also carries `Retry-After`, and its headers name the ceiling (per-key, per-route or per-organization) that refused the request. A `429` never consumes an idempotency key. Current ceilings are readable at `GET /api/v1/usage`.\n\n## Send outcomes\nA `201` from a send route is an outcome, not proof of dispatch: `status` is `sent`, or `suppressed` with the machine-readable block reason in `errorMessage` (never retry those). Provider failures are `503` with the FAILED attempt recorded — retry with the same idempotency key. Anything else 4xx is a request bug.\n\n## Scopes\nAPI keys are scoped to specific permissions. Every scope an endpoint lists is required, and they are not alternatives. Available scopes: `contacts:read`, `contacts:write`, `sequences:read`, `sequences:write`, `templates:read`, `templates:write`, `analytics:read`, `emails:send`, `suppressions:read`, `suppressions:write`, `sending:read`, `sending:write`.",
     "version": "1.0",
     "contact": {}
   },
@@ -3146,7 +3146,8 @@
               "BULK",
               "SEQUENCE",
               "DIRECT",
-              "TRANSACTIONAL_API"
+              "TRANSACTIONAL_API",
+              "CAMPAIGN_TEST"
             ]
           },
           "sampleData": {

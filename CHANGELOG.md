@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0
+
+Additive: every field that existed keeps its shape.
+
+- `usage.get()` now reports the plan's trial and lapse position:
+  `plan.trialEndsAt` (ISO-8601 while a trial is running, null once the plan
+  is paid or when there is no trial) and `plan.lapsedReason`
+  (`NEVER_SUBSCRIBED`, `TRIAL_EXPIRED`, `PAYMENT_FAILED` or `CANCELED`, null
+  for every other status), exported as the `LapsedReason` type. Read these
+  instead of learning that a trial ended, or that a card failed, from a send
+  being refused. This matters more than it did: the API no longer extends the
+  transactional grace to an organization that never paid, so a lapsed trial
+  reports a pool of 0 and refuses transactional sends outright rather than
+  capping them.
+- `usage.get()` now reports `contacts { subscribed, cap, remaining }`: the
+  plan's contact cap, which counts SUBSCRIBED contacts only. `cap` and
+  `remaining` are null without an active subscription cap, and `cap` is 0
+  when the plan is LAPSED.
+
 ## 0.2.0
 
 - `error.retryable`: whether retrying the same request (same idempotency

@@ -308,10 +308,30 @@ export interface EmailDeliverability {
 
 export type PlanGateStatus = 'ACTIVE' | 'LAPSED' | 'UNLIMITED';
 
+/**
+ * Why the plan gates treat an organization as LAPSED. Four different things
+ * to react to: subscribe, fix the card, or resubscribe. `TRIAL_EXPIRED` and
+ * `NEVER_SUBSCRIBED` mean nothing was ever paid, so transactional sends get
+ * no grace either: `monthlySends.pool` is 0 and every send is refused. A
+ * customer who has paid before keeps the transactional grace through dunning.
+ */
+export type LapsedReason =
+  | 'NEVER_SUBSCRIBED'
+  | 'TRIAL_EXPIRED'
+  | 'PAYMENT_FAILED'
+  | 'CANCELED';
+
 export interface OrganizationUsage {
   plan: {
     status: PlanGateStatus;
     name: string | null;
+    /**
+     * When the running trial ends, ISO-8601. Null once the plan is paid, and
+     * when there is no trial. The trial ceilings apply until this instant.
+     */
+    trialEndsAt: string | null;
+    /** Why the plan is LAPSED. Null for every other status. */
+    lapsedReason: LapsedReason | null;
   };
   monthlySends: {
     used: number;
@@ -321,6 +341,14 @@ export interface OrganizationUsage {
     transactionalCeiling: number | null;
     transactionalRemaining: number | null;
     resetsAt: string;
+  };
+  /** The contact cap, which counts SUBSCRIBED contacts only. */
+  contacts: {
+    subscribed: number;
+    /** Null without an active subscription cap; 0 when LAPSED. */
+    cap: number | null;
+    /** How many more contacts fit. Null without an active subscription cap. */
+    remaining: number | null;
   };
   rateLimits: {
     perKeyPerMinute: number;

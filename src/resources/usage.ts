@@ -7,9 +7,11 @@ export class Usage {
 
   /**
    * The organization's monthly send-pool position: the same math the plan
-   * gates run: plus the API rate ceilings. Monitor
+   * gates run: plus the contact cap and the API rate ceilings. Monitor
    * `monthlySends.transactionalRemaining` instead of discovering
-   * `subscription.transactionalGraceExhausted` on a password reset. Numeric
+   * `subscription.transactionalGraceExhausted` on a password reset, and
+   * `plan.trialEndsAt` / `plan.lapsedReason` instead of learning that the
+   * trial ended, or that the card failed, from a send being refused. Numeric
    * fields are null for organizations without an active subscription cap.
    */
   get(options?: RequestOptions): Promise<Result<OrganizationUsage>> {
