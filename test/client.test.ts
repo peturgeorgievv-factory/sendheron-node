@@ -669,6 +669,7 @@ describe('request shaping', () => {
             name: null,
             trialEndsAt: null,
             lapsedReason: null,
+            sendingReview: 'APPROVED',
           },
           monthlySends: {
             used: 766,
@@ -706,6 +707,7 @@ describe('request shaping', () => {
             name: 'Starter',
             trialEndsAt: '2026-09-29T12:00:00.000Z',
             lapsedReason: null,
+            sendingReview: 'APPROVED',
           },
           monthlySends: {
             used: 40,
@@ -741,6 +743,7 @@ describe('request shaping', () => {
             name: null,
             trialEndsAt: null,
             lapsedReason: 'TRIAL_EXPIRED',
+            sendingReview: 'APPROVED',
           },
           monthlySends: {
             used: 12,
@@ -766,5 +769,42 @@ describe('request shaping', () => {
     expect(data!.plan.lapsedReason).toBe('TRIAL_EXPIRED');
     expect(data!.monthlySends.transactionalCeiling).toBe(0);
     expect(data!.contacts.cap).toBe(0);
+  });
+
+  it('reads the sender review of an organization still in the sandbox', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'ACTIVE',
+            name: 'Starter',
+            trialEndsAt: '2026-10-16T12:00:00.000Z',
+            lapsedReason: null,
+            sendingReview: 'SANDBOX',
+          },
+          monthlySends: {
+            used: 3,
+            pool: 500,
+            marketingRemaining: 497,
+            transactionalCeiling: 550,
+            transactionalRemaining: 547,
+            resetsAt: '2026-11-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 2, cap: 500, remaining: 498 },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    // Pool to spare, yet a send to a stranger is still suppressed with
+    // SENDER_UNDER_REVIEW: this field is what says so before a send does.
+    expect(data!.plan.status).toBe('ACTIVE');
+    expect(data!.plan.sendingReview).toBe('SANDBOX');
   });
 });

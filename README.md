@@ -57,7 +57,22 @@ switch (data.status) {
 }
 ```
 
-`SEND_BLOCK_REASONS` exports every suppression reason as a typed list.
+`SEND_BLOCK_REASONS` exports every suppression reason as a typed list, and
+`isSenderSideBlock(reason)` splits them: sender-side reasons
+(`SENDER_SIDE_BLOCK_REASONS`) are your own setup or account state, to fix and
+alert on; recipient-side ones (`RECIPIENT_BLOCK_REASONS`) are facts about the
+address.
+
+`SENDER_UNDER_REVIEW` is sender-side. A new organization stays in a review
+sandbox until it is approved as a sender: until then, a send to any address
+outside its own verified domains and team members is suppressed with this
+reason, on every endpoint, transactional included. The address is fine, so
+do not drop it, and retrying does nothing until approval. Check
+`plan.sendingReview` on `usage.get()` (`SANDBOX`, `REQUESTED` or
+`APPROVED`), and have the organization owner request approval from the
+dashboard. Sends refused before approval are not replayed afterwards: send
+them again, with a new idempotency key if you pass your own, since a reused
+key can replay the recorded refusal.
 
 ## Retries and idempotency: on by default
 
@@ -112,8 +127,9 @@ sendheron.suppressions.remove(email, { confirmHardTier: true })
 
 // Usage
 sendheron.usage.get() // pool position, contact cap + rate ceilings: monitor
-                      // monthlySends.transactionalRemaining, and
-                      // plan.trialEndsAt / plan.lapsedReason
+                      // monthlySends.transactionalRemaining,
+                      // plan.trialEndsAt / plan.lapsedReason, and
+                      // plan.sendingReview
 ```
 
 ## Configuration

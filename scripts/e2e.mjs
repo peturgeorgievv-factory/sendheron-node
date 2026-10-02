@@ -12,7 +12,8 @@
  * Side effects are contained: one template is created and deleted, one
  * manual suppression is added and removed, and the only send goes to the
  * SES mailbox simulator (or is refused by the compliance gate when the
- * workspace has no sender configured, which is itself a probed outcome).
+ * workspace has no sender configured, or while the organization is still
+ * under sender review, which is itself a probed outcome).
  * Run `pnpm build` first; this imports dist/.
  */
 import { exit } from 'node:process';
@@ -50,13 +51,16 @@ const record = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` (${detail})` : ''}`);
 };
 
-// usage: shape parses whatever the plan state
+// usage: shape parses whatever the plan state; the sender review is never null
 {
   const { data, error } = await sdk.usage.get();
   record(
     'usage.get',
-    !error && typeof data.monthlySends.used === 'number',
-    error?.code ?? `plan=${data?.plan.status}`,
+    !error &&
+      typeof data.monthlySends.used === 'number' &&
+      ['SANDBOX', 'REQUESTED', 'APPROVED'].includes(data.plan.sendingReview),
+    error?.code ??
+      `plan=${data?.plan.status} review=${data?.plan.sendingReview}`,
   );
 }
 
@@ -114,7 +118,9 @@ let templateId;
 }
 
 // a raw send resolves to an OUTCOME either way: sent (simulator sink) when
-// the workspace has a configured sender, suppressed when it does not
+// the workspace has a configured sender, suppressed when it does not, and
+// suppressed with SENDER_UNDER_REVIEW while the organization is unreviewed
+// (the simulator is not one of its own domains)
 let sendId;
 {
   const { data, error } = await sdk.emails.send({
