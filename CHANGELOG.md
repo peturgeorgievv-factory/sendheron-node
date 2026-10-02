@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.0
+
+Additive: every field that existed keeps its shape.
+
+- `SENDER_UNDER_REVIEW` joins `SEND_BLOCK_REASONS`, classified sender-side
+  (`SENDER_SIDE_BLOCK_REASONS`, `isSenderSideBlock`). The API now holds every
+  new organization in a review sandbox until it is approved as a sender:
+  until then, a send to any address outside its own verified domains and
+  team members is suppressed with this reason, on every endpoint,
+  transactional included. Earlier versions do not know the reason, so
+  `isSenderSideBlock` returns false for it and code following the groupings
+  treats a good address as a recipient-side fact. The reaction is to request
+  approval, never to drop the address. A `switch` that exhaustively handles
+  `SendBlockReason` needs a case for it.
+- `usage.get()` now reports `plan.sendingReview`: `SANDBOX` (no review
+  requested yet), `REQUESTED` (asked for, not approved yet) or `APPROVED`
+  (the sandbox is lifted), never null, exported as the `SendingReviewStatus`
+  type. Read it to learn the account is still sandboxed instead of
+  discovering it from a refused send. Organizations that existed before the
+  sandbox report `APPROVED`.
+- `suppressions.check()` can now answer with a sender-side `blockReason`:
+  the API's address check runs the organization gate too, so
+  `SENDER_UNDER_REVIEW` or `ORG_SENDING_PAUSED` can come back for an address
+  that is itself fine.
+
 ## 0.3.0
 
 Additive: every field that existed keeps its shape.

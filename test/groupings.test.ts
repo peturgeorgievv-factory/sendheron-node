@@ -9,8 +9,8 @@ import {
 
 describe('block reason groupings', () => {
   it('sender-side and recipient partitions cover the full reason list exactly', () => {
-    // If the backend grows an eleventh reason, this fails until the new
-    // reason is classified: grouping stays a deliberate decision.
+    // If the backend grows another reason, this fails until the new reason
+    // is classified: grouping stays a deliberate decision.
     const union = [...SENDER_SIDE_BLOCK_REASONS, ...RECIPIENT_BLOCK_REASONS];
     expect([...union].sort()).toEqual([...SEND_BLOCK_REASONS].sort());
     expect(new Set(union).size).toBe(SEND_BLOCK_REASONS.length);
@@ -22,6 +22,13 @@ describe('block reason groupings', () => {
     expect(isSenderSideBlock('SOME_FUTURE_REASON')).toBe(false);
     expect(isSenderSideBlock(null)).toBe(false);
     expect(isSenderSideBlock(undefined)).toBe(false);
+  });
+
+  it('classifies SENDER_UNDER_REVIEW as sender-side: the address is fine', () => {
+    // Before 0.4.0 the SDK did not know it, so it defaulted to recipient-side:
+    // an integrator following the groupings would drop a good address
+    // because the account was not approved yet.
+    expect(isSenderSideBlock('SENDER_UNDER_REVIEW')).toBe(true);
   });
 });
 

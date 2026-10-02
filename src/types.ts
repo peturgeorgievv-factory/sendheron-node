@@ -38,6 +38,7 @@ export const SEND_BLOCK_REASONS = [
   'SENDER_DOMAIN_UNVERIFIED',
   'SENDER_DOMAIN_UNVERIFIED_IN_WORKSPACE',
   'SENDER_NOT_CONFIGURED',
+  'SENDER_UNDER_REVIEW',
 ] as const;
 
 export type SendBlockReason = (typeof SEND_BLOCK_REASONS)[number];
@@ -45,7 +46,8 @@ export type SendBlockReason = (typeof SEND_BLOCK_REASONS)[number];
 /**
  * Refusals caused by the SENDING side: the workspace's own configuration or
  * state. These are your bugs/setup to fix (alert on them), not facts about
- * the recipient.
+ * the recipient. `SENDER_UNDER_REVIEW` clears once the organization is
+ * approved as a sender: watch `plan.sendingReview` on `usage.get()`.
  */
 export const SENDER_SIDE_BLOCK_REASONS = [
   'ORG_SENDING_PAUSED',
@@ -53,6 +55,7 @@ export const SENDER_SIDE_BLOCK_REASONS = [
   'SENDER_DOMAIN_UNVERIFIED',
   'SENDER_DOMAIN_UNVERIFIED_IN_WORKSPACE',
   'SENDER_NOT_CONFIGURED',
+  'SENDER_UNDER_REVIEW',
 ] as const satisfies readonly SendBlockReason[];
 
 /**
@@ -321,6 +324,16 @@ export type LapsedReason =
   | 'PAYMENT_FAILED'
   | 'CANCELED';
 
+/**
+ * Where the organization stands with its sender review. Until `APPROVED`,
+ * mail reaches only its team members and addresses on its own verified
+ * domains: every other send is suppressed with `SENDER_UNDER_REVIEW`, on
+ * every endpoint, transactional included. `SANDBOX`: no review requested
+ * yet. `REQUESTED`: the organization owner asked for it and it is not
+ * approved yet; same reach as `SANDBOX`. `APPROVED`: the sandbox is lifted.
+ */
+export type SendingReviewStatus = 'SANDBOX' | 'REQUESTED' | 'APPROVED';
+
 export interface OrganizationUsage {
   plan: {
     status: PlanGateStatus;
@@ -332,6 +345,12 @@ export interface OrganizationUsage {
     trialEndsAt: string | null;
     /** Why the plan is LAPSED. Null for every other status. */
     lapsedReason: LapsedReason | null;
+    /**
+     * The sender review. Never null. Until `APPROVED`, a send to anyone
+     * outside your team and your own verified domains is suppressed with
+     * `SENDER_UNDER_REVIEW`.
+     */
+    sendingReview: SendingReviewStatus;
   };
   monthlySends: {
     used: number;

@@ -20,7 +20,10 @@ export class Suppressions {
   /**
    * "Would we send to this address, and if not, why": answered per stream
    * by the same gate function the send paths run. A consent-suppressed
-   * address still legitimately receives transactional mail.
+   * address still legitimately receives transactional mail. A sender-side
+   * `blockReason` (`isSenderSideBlock`), such as `SENDER_UNDER_REVIEW` or
+   * `ORG_SENDING_PAUSED`, is about your organization, not the address: do
+   * not drop the address over it.
    */
   check(
     email: string,
