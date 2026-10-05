@@ -334,6 +334,18 @@ export type LapsedReason =
  */
 export type SendingReviewStatus = 'SANDBOX' | 'REQUESTED' | 'APPROVED';
 
+/**
+ * One plan cap's position. `remaining` never goes below 0, so `used` can
+ * sit above `cap`, after a lapse for instance.
+ */
+export interface CountUsage {
+  used: number;
+  /** Null without an active subscription cap; 0 when LAPSED. */
+  cap: number | null;
+  /** How many more fit. Null without an active subscription cap. */
+  remaining: number | null;
+}
+
 export interface OrganizationUsage {
   plan: {
     status: PlanGateStatus;
@@ -369,6 +381,18 @@ export interface OrganizationUsage {
     /** How many more contacts fit. Null without an active subscription cap. */
     remaining: number | null;
   };
+  /**
+   * Sending domains, in any verification state, counted once however many
+   * workspaces share one. A running trial can lower the cap.
+   */
+  domains: CountUsage;
+  /**
+   * Live workspaces: archived ones do not count. `cap` is the plan's, or a
+   * per-organization override when one is set.
+   */
+  workspaces: CountUsage;
+  /** Team members, pending invitations included: an invitation holds a seat. */
+  teamMembers: CountUsage;
   rateLimits: {
     perKeyPerMinute: number;
     organizationPerMinute: {

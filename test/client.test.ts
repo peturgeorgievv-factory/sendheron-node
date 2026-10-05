@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { SendHeron, SendHeronError } from '../src/index.js';
+import { type CountUsage, SendHeron, SendHeronError } from '../src/index.js';
 import { type MockServer, startMockServer } from './mock-server.js';
 
 const KEY = 'ema_live_test_key';
@@ -680,6 +680,9 @@ describe('request shaping', () => {
             resetsAt: '2026-09-01T00:00:00.000Z',
           },
           contacts: { subscribed: 4120, cap: null, remaining: null },
+          domains: { used: 3, cap: null, remaining: null },
+          workspaces: { used: 4, cap: null, remaining: null },
+          teamMembers: { used: 6, cap: null, remaining: null },
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -695,6 +698,10 @@ describe('request shaping', () => {
     expect(data!.contacts.subscribed).toBe(4120);
     expect(data!.contacts.cap).toBeNull();
     expect(data!.rateLimits.organizationPerMinute.SEND).toBe(200);
+    for (const count of [data!.domains, data!.workspaces, data!.teamMembers]) {
+      expect(count.cap).toBeNull();
+      expect(count.remaining).toBeNull();
+    }
   });
 
   it('reads the trial deadline and the contact cap on a trialing plan', async () => {
@@ -718,6 +725,9 @@ describe('request shaping', () => {
             resetsAt: '2026-10-01T00:00:00.000Z',
           },
           contacts: { subscribed: 180, cap: 500, remaining: 320 },
+          domains: { used: 1, cap: 2, remaining: 1 },
+          workspaces: { used: 2, cap: 3, remaining: 1 },
+          teamMembers: { used: 3, cap: 4, remaining: 1 },
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -754,6 +764,9 @@ describe('request shaping', () => {
             resetsAt: '2026-10-01T00:00:00.000Z',
           },
           contacts: { subscribed: 90, cap: 0, remaining: 0 },
+          domains: { used: 1, cap: 0, remaining: 0 },
+          workspaces: { used: 2, cap: 0, remaining: 0 },
+          teamMembers: { used: 4, cap: 0, remaining: 0 },
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -769,6 +782,9 @@ describe('request shaping', () => {
     expect(data!.plan.lapsedReason).toBe('TRIAL_EXPIRED');
     expect(data!.monthlySends.transactionalCeiling).toBe(0);
     expect(data!.contacts.cap).toBe(0);
+    // Every cap drops to 0 and remaining never goes negative, so what the
+    // organization already holds sits above its cap.
+    expect(data!.teamMembers).toEqual({ used: 4, cap: 0, remaining: 0 });
   });
 
   it('reads the sender review of an organization still in the sandbox', async () => {
@@ -792,6 +808,9 @@ describe('request shaping', () => {
             resetsAt: '2026-11-01T00:00:00.000Z',
           },
           contacts: { subscribed: 2, cap: 500, remaining: 498 },
+          domains: { used: 1, cap: 2, remaining: 1 },
+          workspaces: { used: 1, cap: 3, remaining: 2 },
+          teamMembers: { used: 1, cap: 4, remaining: 3 },
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -806,5 +825,48 @@ describe('request shaping', () => {
     // SENDER_UNDER_REVIEW: this field is what says so before a send does.
     expect(data!.plan.status).toBe('ACTIVE');
     expect(data!.plan.sendingReview).toBe('SANDBOX');
+  });
+
+  it('reads the domain, workspace and team-member caps on a paid plan', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'ACTIVE',
+            name: 'Growth',
+            trialEndsAt: null,
+            lapsedReason: null,
+            sendingReview: 'APPROVED',
+          },
+          monthlySends: {
+            used: 1200,
+            pool: 20000,
+            marketingRemaining: 18800,
+            transactionalCeiling: 22000,
+            transactionalRemaining: 20800,
+            resetsAt: '2026-11-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 5400, cap: 8000, remaining: 2600 },
+          domains: { used: 3, cap: 4, remaining: 1 },
+          workspaces: { used: 12, cap: 20, remaining: 8 },
+          teamMembers: { used: 7, cap: 12, remaining: 5 },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    const caps: CountUsage[] = [
+      data!.domains,
+      data!.workspaces,
+      data!.teamMembers,
+    ];
+    expect(caps.map((count) => count.remaining)).toEqual([1, 8, 5]);
+    expect(data!.teamMembers).toEqual({ used: 7, cap: 12, remaining: 5 });
   });
 });

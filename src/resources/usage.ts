@@ -7,7 +7,8 @@ export class Usage {
 
   /**
    * The organization's monthly send-pool position: the same math the plan
-   * gates run: plus the contact cap and the API rate ceilings. Monitor
+   * gates run: plus every other plan cap (contacts, domains, workspaces,
+   * team members) and the API rate ceilings. Monitor
    * `monthlySends.transactionalRemaining` instead of discovering
    * `subscription.transactionalGraceExhausted` on a password reset, and
    * `plan.trialEndsAt` / `plan.lapsedReason` / `plan.sendingReview` instead
