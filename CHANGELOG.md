@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+Additive: every field that existed keeps its shape.
+
+- `usage.get()` now reports every plan cap, not only contacts: `domains`,
+  `workspaces` and `teamMembers`, each `{ used, cap, remaining }`, exported
+  as the `CountUsage` type. `cap` and `remaining` are null without an active
+  subscription cap and 0 when the plan is LAPSED; `remaining` never goes
+  below 0, so `used` can sit above `cap`. `domains` counts each sending
+  domain once across the organization, in any verification state, and a
+  running trial can lower its cap. `workspaces` counts live workspaces only,
+  and its `cap` can be a per-organization override rather than the plan's.
+  `teamMembers` counts pending invitations, since an invitation holds a
+  seat. Read them to show the headroom before an add is refused.
+
 ## 0.4.0
 
 Additive: every field that existed keeps its shape.

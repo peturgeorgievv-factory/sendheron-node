@@ -126,7 +126,7 @@ sendheron.suppressions.add({ email, note })
 sendheron.suppressions.remove(email, { confirmHardTier: true })
 
 // Usage
-sendheron.usage.get() // pool position, contact cap + rate ceilings: monitor
+sendheron.usage.get() // pool position, plan caps + rate ceilings: monitor
                       // monthlySends.transactionalRemaining,
                       // plan.trialEndsAt / plan.lapsedReason, and
                       // plan.sendingReview

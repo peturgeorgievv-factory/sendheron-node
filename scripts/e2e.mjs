@@ -51,14 +51,18 @@ const record = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` (${detail})` : ''}`);
 };
 
-// usage: shape parses whatever the plan state; the sender review is never null
+// usage: shape parses whatever the plan state; the sender review is never
+// null, and every plan cap is reported
 {
   const { data, error } = await sdk.usage.get();
   record(
     'usage.get',
     !error &&
       typeof data.monthlySends.used === 'number' &&
-      ['SANDBOX', 'REQUESTED', 'APPROVED'].includes(data.plan.sendingReview),
+      ['SANDBOX', 'REQUESTED', 'APPROVED'].includes(data.plan.sendingReview) &&
+      ['domains', 'workspaces', 'teamMembers'].every(
+        (cap) => typeof data[cap]?.used === 'number',
+      ),
     error?.code ??
       `plan=${data?.plan.status} review=${data?.plan.sendingReview}`,
   );
