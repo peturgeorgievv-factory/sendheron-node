@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+No code or type change. The API changed underneath the SDK (live since
+2026-10-14), in ways an integration can observe:
+
+- `suppressions.check()` validates the address: a malformed or empty one
+  now resolves to a 400 error instead of a verdict.
+- A record that belongs to another workspace of your organization answers
+  404, never 403, so the API no longer confirms that it exists. In this
+  SDK, `templates.update()` and `templates.remove()` answered 403 before.
+- A paused sequence now stops advancing its enrolled contacts, keeping
+  each where it stands until it is resumed. It refuses new enrollments
+  (400 `sequences.sequenceNotActive`), as it always has.
+- `PUT /api/v1/contacts/{id}` merges `properties` into the stored ones,
+  like the upsert, instead of replacing them: setting one key no longer
+  wipes the others.
+- Idempotency keys are scoped to the API key's workspace and the endpoint.
+  That is not new, but the API reference used to say organization: the
+  same key sent from two workspaces is two separate requests.
+
+Doc comments now match the API: what `suppressions.check()` evaluates
+(sender configuration, list opt-outs and an archived workspace only on a
+real send), who a sandboxed organization reaches (verified members, not
+every team member), and what `from`, `contactId`, `sampleData` and
+`sendToAll` do.
+
 ## 0.5.0
 
 Additive: every field that existed keeps its shape.

@@ -18,12 +18,16 @@ export class Suppressions {
   }
 
   /**
-   * "Would we send to this address, and if not, why": answered per stream
-   * by the same gate function the send paths run. A consent-suppressed
-   * address still legitimately receives transactional mail. A sender-side
-   * `blockReason` (`isSenderSideBlock`), such as `SENDER_UNDER_REVIEW` or
-   * `ORG_SENDING_PAUSED`, is about your organization, not the address: do
-   * not drop the address over it.
+   * "Would we send to this address, and if not, why": answered per stream,
+   * because a consent-suppressed address still legitimately receives
+   * transactional mail. This is the recipient and organization verdict
+   * (suppression tiers, contact status, sending pause); sender
+   * configuration, list opt-outs and an archived workspace are only
+   * evaluated on a real send, so `allowed: true` is not a promise that a
+   * send goes out. A sender-side `blockReason` (`isSenderSideBlock`), such
+   * as `SENDER_UNDER_REVIEW` or `ORG_SENDING_PAUSED`, is about your
+   * organization, not the address: do not drop the address over it. A
+   * malformed address is a 400 error, not a verdict.
    */
   check(
     email: string,

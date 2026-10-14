@@ -27,7 +27,8 @@ type WithoutSendAt = { sendAt?: undefined };
  * - `error.statusCode === 429`     → rate limited; Retry-After was honored
  *                                    before the client gave up.
  *
- * With `sendAt`, the result is the ScheduledEmail instead.
+ * With `sendAt`, the result is the ScheduledEmail instead: its id is for
+ * `cancelScheduled()`, not for `get()`.
  */
 export class Emails {
   constructor(private readonly client: HttpClient) {}
@@ -105,7 +106,11 @@ export class Emails {
     );
   }
 
-  /** Cancel a scheduled send (raw or templated) before it fires. */
+  /**
+   * Cancel a scheduled send (raw or templated) before it fires. Once it is
+   * no longer pending (dispatching, sent, cancelled, suppressed or failed),
+   * the API answers 400.
+   */
   cancelScheduled(
     id: string,
     options?: RequestOptions,
