@@ -6,16 +6,19 @@ No code or type change. The API changed underneath the SDK (live since
 2026-10-14), in ways an integration can observe:
 
 - `suppressions.check()` validates the address: a malformed or empty one
-  now resolves to a 400 error instead of a verdict.
+  now resolves to a 400 error instead of a verdict. It is the rule
+  `emails.send()` and `emails.sendTemplate()` already apply to `to`, so no
+  address a send would accept is refused.
 - A record that belongs to another workspace of your organization answers
-  404, never 403, so the API no longer confirms that it exists. In this
-  SDK, `templates.update()` and `templates.remove()` answered 403 before.
+  404, never 403, as the API reference always documented, so the API no
+  longer confirms that it exists. In this SDK, `templates.update()` and
+  `templates.remove()` answered 403 before.
 - A paused sequence now stops advancing its enrolled contacts, keeping
   each where it stands until it is resumed. It refuses new enrollments
   (400 `sequences.sequenceNotActive`), as it always has.
 - `PUT /api/v1/contacts/{id}` merges `properties` into the stored ones,
-  like the upsert, instead of replacing them: setting one key no longer
-  wipes the others.
+  like the upsert, instead of replacing them, as the API reference always
+  said: setting one key no longer wipes the others.
 - Idempotency keys are scoped to the API key's workspace and the endpoint.
   That is not new, but the API reference used to say organization: the
   same key sent from two workspaces is two separate requests.
