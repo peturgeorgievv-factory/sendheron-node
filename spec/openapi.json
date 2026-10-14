@@ -92,7 +92,7 @@
             "schema": {
               "minimum": 1,
               "maximum": 100,
-              "example": 50,
+              "default": 50,
               "type": "number"
             }
           },
@@ -291,7 +291,7 @@
             "schema": {
               "minimum": 1,
               "maximum": 100,
-              "example": 20,
+              "default": 20,
               "type": "number"
             }
           }
@@ -350,7 +350,7 @@
             "schema": {
               "minimum": 1,
               "maximum": 100,
-              "example": 20,
+              "default": 20,
               "type": "number"
             }
           },
@@ -367,7 +367,8 @@
                 "opened",
                 "clicked",
                 "bounced",
-                "failed"
+                "failed",
+                "suppressed"
               ],
               "type": "string"
             }
@@ -472,7 +473,7 @@
             "description": "Unauthorized — invalid or missing API key"
           },
           "404": {
-            "description": "Contact or tag not found"
+            "description": "Contact not found. A tag the contact does not carry is ignored, not a 404."
           }
         },
         "security": [
@@ -614,7 +615,7 @@
             "description": "Insufficient API key scopes"
           },
           "404": {
-            "description": "Contact or sequence not found"
+            "description": "No active enrollment for this contact in this sequence; a paused enrollment counts as not found"
           }
         },
         "security": [
@@ -651,7 +652,7 @@
             "schema": {
               "minimum": 1,
               "maximum": 100,
-              "example": 50,
+              "default": 50,
               "type": "number"
             }
           },
@@ -735,7 +736,7 @@
             "schema": {
               "minimum": 1,
               "maximum": 100,
-              "example": 25,
+              "default": 25,
               "type": "number"
             }
           },
@@ -840,7 +841,7 @@
     },
     "/api/v1/sequences/{id}/status": {
       "patch": {
-        "description": "Activation is refused unless the graph is sound: at least one step, a trigger, no orphaned steps, and every step configured well enough to run. Pausing keeps each enrolled contact exactly where it stands, so activating again continues rather than restarts. A paused sequence still accepts enrollments, it just stops advancing them, which is why a sequence that was paused and forgotten looks healthy from the outside and delivers nothing.",
+        "description": "Activation is refused unless the graph is sound: at least one step, a trigger, no orphaned steps, and every step configured well enough to run. Pausing keeps each enrolled contact exactly where it stands and stops the worker advancing them, so activating again continues rather than restarts. A paused sequence refuses new enrollments (400 sequences.sequenceNotActive) and its trigger enrols nobody, which is why a sequence that was paused and forgotten looks healthy from the outside and delivers nothing.",
         "operationId": "SequencesController_setSequenceStatus",
         "parameters": [
           {
@@ -1136,13 +1137,13 @@
     },
     "/api/v1/emails/send": {
       "post": {
-        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, or \"suppressed\" with the block reason in errorMessage when the compliance gate refused (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId.",
+        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, or \"suppressed\" with the block reason in errorMessage when the compliance gate refused (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId. With sendAt the response is the scheduled email instead: its id is for DELETE /api/v1/emails/scheduled/{id}, not for GET /api/v1/emails/{id}.",
         "operationId": "EmailsController_sendEmail",
         "parameters": [
           {
             "name": "idempotency-key",
             "in": "header",
-            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to the API key's workspace and this endpoint. Reusing a key with a different body returns 409.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1195,7 +1196,7 @@
           {
             "name": "idempotency-key",
             "in": "header",
-            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to the API key's workspace and this endpoint. Reusing a key with a different body returns 409.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1241,7 +1242,7 @@
           {
             "name": "idempotency-key",
             "in": "header",
-            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to the API key's workspace and this endpoint. Reusing a key with a different body returns 409.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1251,6 +1252,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Scheduled email UUID, as returned by a send with sendAt",
             "schema": {
               "type": "string"
             }
@@ -1261,7 +1263,7 @@
             "description": "Scheduled email cancelled"
           },
           "400": {
-            "description": "Already sent or cancelled"
+            "description": "No longer pending: already dispatching, sent, cancelled, suppressed or failed"
           },
           "404": {
             "description": "Scheduled email not found"
@@ -1286,7 +1288,7 @@
           {
             "name": "idempotency-key",
             "in": "header",
-            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to the API key's workspace and this endpoint. Reusing a key with a different body returns 409.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1313,6 +1315,9 @@
           "404": {
             "description": "Template or contact not found"
           },
+          "409": {
+            "description": "Idempotency conflict: the key is in flight, or was reused with a different payload"
+          },
           "429": {
             "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
           },
@@ -1338,7 +1343,7 @@
           {
             "name": "idempotency-key",
             "in": "header",
-            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to your organization and this endpoint. Reusing a key with a different body returns 409.",
+            "description": "Opaque client-generated key (max 255 chars). Repeating a request with the same key replays the original response instead of sending again. Keys expire after 24h and are scoped to the API key's workspace and this endpoint. Reusing a key with a different body returns 409.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1361,6 +1366,9 @@
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"
+          },
+          "409": {
+            "description": "Idempotency conflict: the key is in flight, or was reused with a different payload"
           },
           "429": {
             "description": "Too many requests — rate limit exceeded"
@@ -1956,6 +1964,7 @@
             "name": "reason",
             "required": false,
             "in": "query",
+            "description": "Filter by why the address was suppressed",
             "schema": {
               "type": "string",
               "enum": [
@@ -1984,6 +1993,7 @@
             "name": "source",
             "required": false,
             "in": "query",
+            "description": "Filter by what recorded the suppression",
             "schema": {
               "type": "string",
               "enum": [
@@ -2046,14 +2056,16 @@
     },
     "/api/v1/suppressions/check": {
       "get": {
-        "description": "Answers per stream, because there is no single correct answer: an address that opted out of marketing still legitimately receives password resets. Evaluated with the same gate the send paths use, so it cannot drift from real behaviour.",
+        "description": "Answers per stream, because there is no single correct answer: an address that opted out of marketing still legitimately receives password resets. This is the recipient and organization verdict (suppression tiers, contact status, sending pause); sender configuration, list opt-outs and an archived workspace are only evaluated on a real send.",
         "operationId": "SuppressionsController_checkEmail",
         "parameters": [
           {
             "name": "email",
             "required": true,
             "in": "query",
+            "description": "Address to check",
             "schema": {
+              "example": "user@example.com",
               "type": "string"
             }
           }
@@ -2076,12 +2088,12 @@
     },
     "/api/v1/suppressions/export": {
       "get": {
-        "description": "Streams the whole org in pages rather than buffering it, so a large list cannot exhaust memory.",
+        "description": "Pages through the list on a keyset cursor and returns this workspace's view: organization-wide bounces and complaints plus this workspace's opt-outs.",
         "operationId": "SuppressionsController_exportSuppressions",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "CSV stream"
+            "description": "CSV file"
           }
         },
         "security": [
@@ -2166,7 +2178,7 @@
         ]
       },
       "post": {
-        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, and an ownership challenge TXT record. Publish them, then call verify. The challenge is omitted only when this organization has already verified the same domain in another workspace, in which case the domain is authenticated immediately and needs no DNS at all.",
+        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, an ownership challenge TXT record and, when the mail subdomain is free, the MAIL FROM MX and SPF records. Publish them, then call verify. The challenge is omitted only when this organization has already verified the same domain in another workspace, in which case the domain is authenticated immediately and needs no DNS at all.",
         "operationId": "SendingDomainsController_addDomain",
         "parameters": [],
         "requestBody": {
@@ -2207,6 +2219,7 @@
             "name": "domainId",
             "required": true,
             "in": "path",
+            "description": "Sending domain UUID",
             "schema": {
               "type": "string"
             }
@@ -2243,6 +2256,7 @@
             "name": "domainId",
             "required": true,
             "in": "path",
+            "description": "Sending domain UUID",
             "schema": {
               "type": "string"
             }
@@ -2269,7 +2283,7 @@
     },
     "/api/v1/sending/identities": {
       "get": {
-        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated here), DOMAIN_VERIFIED_ELSEWHERE (this organization authenticated it in another workspace, so adding it here needs no DNS), DOMAIN_PENDING (added here, still waiting on DNS), or DOMAIN_UNVERIFIED (nobody in this organization has authenticated it).",
+        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated here), DOMAIN_VERIFIED_ELSEWHERE (this organization authenticated it in another workspace, so adding it here needs no DNS), DOMAIN_PENDING (added here, not verified yet), or DOMAIN_UNVERIFIED (nobody in this organization has authenticated it).",
         "operationId": "SenderIdentitiesController_listIdentities",
         "parameters": [],
         "responses": {
@@ -2291,7 +2305,7 @@
         ]
       },
       "post": {
-        "description": "The first identity in a workspace becomes its default automatically. An address whose domain is not authenticated is accepted and reported as unsendable, so an identity can be prepared while the DNS is still propagating.",
+        "description": "The first identity in a workspace becomes its default automatically. An address on a domain this workspace has added but not yet verified is accepted and reported as unsendable, so an identity can be prepared while the DNS is still propagating.",
         "operationId": "SenderIdentitiesController_createIdentity",
         "parameters": [],
         "requestBody": {
@@ -2309,7 +2323,7 @@
             "description": "The created identity"
           },
           "400": {
-            "description": "emailConfig.domainNotInWorkspace: the address is on a domain this workspace has not added. Add and verify the domain first; a pending domain is accepted."
+            "description": "emailConfig.domainNotInWorkspace: the address is on a domain this workspace has not added and no workspace of this organization has verified. Add the domain first; a pending domain is accepted."
           }
         },
         "security": [
@@ -2325,13 +2339,14 @@
     },
     "/api/v1/sending/identities/{identityId}": {
       "patch": {
-        "description": "Replaces the identity fields. Changing the From address to one on an authenticated domain is itself a remedy: sequence enrollments this workspace parked for want of a verified sender resume as soon as the default identity can send.",
+        "description": "Label and fromEmail are replaced; an omitted fromName or replyToEmail keeps its current value. Changing the From address to one on an authenticated domain is itself a remedy: sequence enrollments this workspace parked for want of a verified sender resume as soon as the default identity can send.",
         "operationId": "SenderIdentitiesController_updateIdentity",
         "parameters": [
           {
             "name": "identityId",
             "required": true,
             "in": "path",
+            "description": "Sender identity UUID",
             "schema": {
               "type": "string"
             }
@@ -2352,7 +2367,7 @@
             "description": "The updated identity"
           },
           "400": {
-            "description": "emailConfig.domainNotInWorkspace: the new address is on a domain this workspace has not added."
+            "description": "emailConfig.domainNotInWorkspace: the new address is on a domain this workspace has not added and no workspace of this organization has verified."
           },
           "404": {
             "description": "No such identity in this workspace"
@@ -2376,6 +2391,7 @@
             "name": "identityId",
             "required": true,
             "in": "path",
+            "description": "Sender identity UUID",
             "schema": {
               "type": "string"
             }
@@ -2409,6 +2425,7 @@
             "name": "identityId",
             "required": true,
             "in": "path",
+            "description": "Sender identity UUID",
             "schema": {
               "type": "string"
             }
@@ -2559,10 +2576,14 @@
             "description": "Contact email — used as the unique key for deduplication"
           },
           "firstName": {
-            "type": "string"
+            "type": "string",
+            "description": "First name",
+            "example": "John"
           },
           "lastName": {
-            "type": "string"
+            "type": "string",
+            "description": "Last name",
+            "example": "Doe"
           },
           "properties": {
             "type": "object",
@@ -2668,14 +2689,14 @@
         "type": "object",
         "properties": {
           "tagIds": {
-            "description": "Tag UUIDs to add. Provide tagIds, tagNames, or both.",
+            "description": "Tag UUIDs to add. Both lists are optional; with neither, the contact is returned unchanged.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
           "tagNames": {
-            "description": "Tag names to add (auto-created if not found). Provide tagIds, tagNames, or both.",
+            "description": "Tag names to add (auto-created if not found). Both lists are optional; with neither, the contact is returned unchanged.",
             "type": "array",
             "items": {
               "type": "string"
@@ -2723,7 +2744,7 @@
           },
           "config": {
             "type": "object",
-            "description": "Step configuration. The keys depend on `type`, and a key this step type does not read is REJECTED rather than stored — a config the worker cannot understand used to be accepted silently and simply never run.\n\nTRIGGER: `triggerType` (manual | contact_created | list_added | tag_added | event | webhook), plus `tagId` (UUID) for tag_added, `listId` (UUID) for list_added, `eventName` for event, and an optional `source` filter for contact_created.\nSEND_EMAIL: `templateId` (UUID).\nDELAY: `duration` (positive number) and `unit` (minutes | hours | days). A delay of one week is `{\"duration\": 168, \"unit\": \"hours\"}` or `{\"duration\": 7, \"unit\": \"days\"}` — there is no `days` key.\nCONDITION: `field`, `operator`, and `value` where the operator takes one.\nACTION: `actionType`, plus `tagId` or `tagName` for tag actions, `properties` for property updates, `webhookUrl` (https) for webhooks.\n\nValues are validated here; whether a step is COMPLETE is checked at activation, so a draft may still omit required keys.",
+            "description": "Step configuration. The keys depend on `type`, and a key this step type does not read is REJECTED rather than stored: a config the worker cannot understand used to be accepted silently and simply never run.\n\nTRIGGER: `triggerType` (manual | contact_created | list_added | tag_added | event | webhook), plus `tagId` (UUID) for tag_added, `listId` (UUID) for list_added, `eventName` for event, and an optional `source` filter for contact_created.\nSEND_EMAIL: `templateId` (UUID).\nDELAY: `duration` (positive number) and `unit` (minutes | hours | days). A delay of one week is {\"duration\": 168, \"unit\": \"hours\"} or {\"duration\": 7, \"unit\": \"days\"}; there is no `days` key.\nCONDITION: `operator` (equals | not_equals | contains | not_contains | starts_with | ends_with | is_set | is_not_set | greater_than | less_than | has_tag | not_has_tag), `field` and `value`. `field` is a contact column (email, firstName, lastName, status) or a custom property key, compared as text; greater_than and less_than compare as numbers. is_set and is_not_set take no `value`. has_tag and not_has_tag take the tag UUID as `value` and read no `field`.\nACTION: `actionType` (add_tag | remove_tag | update_property | send_webhook), plus `tagId` or `tagName` for add_tag and remove_tag, `properties` (object) for update_property, `webhookUrl` (https) for send_webhook.\n\nValues are validated here; whether a step is COMPLETE is checked at activation, so a draft may still omit required keys.",
             "example": {
               "duration": 168,
               "unit": "hours"
@@ -2778,15 +2799,17 @@
           },
           "allowBranchRemoval": {
             "type": "boolean",
-            "description": "Confirm removing a true/false branch edge that a CONDITION step had before this write. Without it such a payload is refused (400 branchRemovalNeedsConfirmation): a one-branch condition is a valid graph (\"stop here\"), so the dropped branch would otherwise take effect silently — contacts taking that outcome just stop. Retargeting a branch (same edgeType, different destination) needs no flag."
+            "description": "Confirm removing a true/false branch edge that a CONDITION step had before this write. Without it such a payload is refused (400 sequences.branchRemovalNeedsConfirmation): a one-branch condition is a valid graph (\"stop here\"), so the dropped branch would otherwise take effect silently — contacts taking that outcome just stop. Retargeting a branch (same edgeType, different destination) needs no flag."
           },
           "steps": {
+            "description": "Every step of the sequence. The payload replaces the graph, so a step left out is deleted (refused while contacts have passed through it).",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GraphStepRestDto"
             }
           },
           "edges": {
+            "description": "Every edge of the sequence, by step ref.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GraphEdgeRestDto"
@@ -2807,7 +2830,7 @@
               "ACTIVE",
               "PAUSED"
             ],
-            "description": "ACTIVE resumes the sequence, and is refused unless the graph is sound: at least one step, a trigger, no orphans, and every step configured well enough to run. PAUSED stops contacts advancing while keeping their position, so resuming continues rather than restarts.",
+            "description": "ACTIVE resumes the sequence, and is refused unless the graph is sound: at least one step, a trigger, no orphans, and every step configured well enough to run. PAUSED stops contacts advancing while keeping their position, so resuming continues rather than restarts; while paused the sequence refuses new enrollments.",
             "example": "ACTIVE"
           }
         },
@@ -2913,7 +2936,7 @@
           },
           "from": {
             "type": "string",
-            "description": "Sender email address (defaults to org configured sender)",
+            "description": "Sender address. Defaults to the workspace's default sender identity; with no identity configured the send is suppressed with SENDER_NOT_CONFIGURED.",
             "example": "noreply@yourdomain.com"
           },
           "fromName": {
@@ -2950,7 +2973,7 @@
             "format": "date-time",
             "type": "string",
             "description": "Schedule the send for a future time (ISO-8601). Cancel before it fires with DELETE /api/v1/emails/scheduled/{id}. Compliance is evaluated when it fires, not when it is scheduled.",
-            "example": "2026-08-01T09:00:00.000Z"
+            "example": "2030-01-01T09:00:00.000Z"
           },
           "attachments": {
             "description": "Attachments (max 10, 10 MB decoded total, allowlisted MIME types). Transactional sends only — this route always qualifies. Not combinable with sendAt. Bytes are never stored, and are excluded from the idempotency fingerprint.",
@@ -2992,7 +3015,7 @@
           },
           "contactId": {
             "type": "string",
-            "description": "Contact ID (UUID). When provided, auto-populates contact.* template variables (firstName, lastName, email, properties) and guarantees unsubscribe headers.",
+            "description": "Contact ID (UUID). Populates contact.firstName, contact.lastName, contact.email and each custom property as contact.<key>. For a MARKETING template it identifies the contact whose unsubscribe link the mail carries; transactional mail carries none.",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "subject": {
@@ -3002,7 +3025,7 @@
           },
           "from": {
             "type": "string",
-            "description": "Sender email address (defaults to org configured sender)",
+            "description": "Sender address. Defaults to the workspace's default sender identity; with no identity configured the send is suppressed with SENDER_NOT_CONFIGURED.",
             "example": "noreply@yourdomain.com"
           },
           "fromName": {
@@ -3033,7 +3056,7 @@
             "format": "date-time",
             "type": "string",
             "description": "Schedule the send for a future time (ISO-8601). The template is rendered and compliance is evaluated when it fires, not when it is scheduled. Cancel before it fires with DELETE /api/v1/emails/scheduled/{id}.",
-            "example": "2026-08-01T09:00:00.000Z"
+            "example": "2030-01-01T09:00:00.000Z"
           },
           "attachments": {
             "description": "Attachments (max 10, 10 MB decoded total, allowlisted MIME types). Only allowed when the template is TRANSACTIONAL. Not combinable with sendAt. Bytes are never stored, and are excluded from the idempotency fingerprint.",
@@ -3058,12 +3081,12 @@
           },
           "from": {
             "type": "string",
-            "description": "Sender email address (defaults to org configured sender)",
+            "description": "Sender address. Defaults to the workspace's default sender identity; with no identity configured the send is suppressed with SENDER_NOT_CONFIGURED.",
             "example": "noreply@yourdomain.com"
           },
           "sampleData": {
             "type": "object",
-            "description": "Sample data for template variable previewing",
+            "description": "Template variables merged into every recipient's render; contact.* is set per recipient on top.",
             "example": {
               "firstName": "John",
               "company": "Acme"
@@ -3086,7 +3109,7 @@
           },
           "sendToAll": {
             "type": "boolean",
-            "description": "Send to all contacts in the organization",
+            "description": "Send to every subscribed contact in this workspace",
             "example": false
           }
         },
@@ -3099,7 +3122,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Tag name (must be unique per organization)"
+            "description": "Tag name (must be unique per workspace)"
           },
           "color": {
             "type": "string",
@@ -3146,7 +3169,7 @@
           },
           "channel": {
             "type": "string",
-            "description": "Channel to preview through. A channel can only tighten the policy, never loosen it: CAMPAIGN and BULK are always marketing whatever the template says, so previewing through one shows the unsubscribe block a TRANSACTIONAL template would still gain.",
+            "description": "Channel to preview through. CAMPAIGN and BULK are always marketing whatever the template says, so previewing through one shows the unsubscribe block a TRANSACTIONAL template would still gain. TRANSACTIONAL_API and CAMPAIGN_TEST are always transactional. SEQUENCE and DIRECT follow the template.",
             "enum": [
               "CAMPAIGN",
               "BULK",
@@ -3232,8 +3255,8 @@
           "tagIds": {
             "description": "Tag IDs to associate with this template",
             "example": [
-              "uuid1",
-              "uuid2"
+              "550e8400-e29b-41d4-a716-446655440000",
+              "550e8400-e29b-41d4-a716-446655440001"
             ],
             "type": "array",
             "items": {
@@ -3285,7 +3308,7 @@
           "tagIds": {
             "description": "Tag IDs to associate (replaces existing tags)",
             "example": [
-              "uuid1"
+              "550e8400-e29b-41d4-a716-446655440000"
             ],
             "type": "array",
             "items": {
@@ -3303,6 +3326,7 @@
         "properties": {
           "email": {
             "type": "string",
+            "description": "Address to suppress",
             "example": "user@example.com"
           },
           "reason": {
@@ -3359,7 +3383,7 @@
           },
           "fromEmail": {
             "type": "string",
-            "description": "The From address. Accepted whatever its domain, and reported as unsendable until that domain is authenticated in this workspace — so an identity can be prepared before the DNS is in place.",
+            "description": "The From address. Accepted when its domain is added to this workspace (verification may still be pending) or verified in another workspace of this organization, and reported as unsendable until it is authenticated here, so an identity can be prepared before the DNS is in place. Any other domain is refused.",
             "example": "billing@acme.com"
           },
           "fromName": {

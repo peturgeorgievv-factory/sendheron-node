@@ -23,6 +23,8 @@ export interface RequestOptions {
    * absent and reused across the client's internal retries, so a timeout
    * cannot double-send. Supply your own to deduplicate across YOUR retries
    * too; after the client gives up, the key it used is on `error.idempotencyKey`.
+   * Keys are scoped to the API key's workspace and the endpoint, and expire
+   * after 24 hours.
    */
   idempotencyKey?: string;
   signal?: AbortSignal;

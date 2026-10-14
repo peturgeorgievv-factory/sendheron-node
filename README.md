@@ -65,9 +65,10 @@ address.
 
 `SENDER_UNDER_REVIEW` is sender-side. A new organization stays in a review
 sandbox until it is approved as a sender: until then, a send to any address
-outside its own verified domains and team members is suppressed with this
-reason, on every endpoint, transactional included. The address is fine, so
-do not drop it, and retrying does nothing until approval. Check
+outside its own verified domains and its verified members (members who
+confirmed their email address) is suppressed with this reason, on every
+endpoint, transactional included. The address is fine, so do not drop it,
+and retrying does nothing until approval. Check
 `plan.sendingReview` on `usage.get()` (`SANDBOX`, `REQUESTED` or
 `APPROVED`), and have the organization owner request approval from the
 dashboard. Sends refused before approval are not replayed afterwards: send
@@ -96,7 +97,8 @@ key can replay the recorded refusal.
   `error.idempotencyKey`: resume the SAME logical send with it instead of
   minting a new one. Attachment *bytes* are excluded from the server's
   fingerprint, so a retried job that regenerated the same PDF replays
-  cleanly.
+  cleanly. Keys are scoped to the API key's workspace and the endpoint, and
+  expire after 24 hours.
 - API failures are **returned, never thrown**: every call resolves to
   `{ data, error }`.
 
@@ -119,8 +121,8 @@ sendheron.templates.preview({ bodyHtml, emailType, sampleData })
 sendheron.templates.validate(document)
 
 // Suppressions
-sendheron.suppressions.check('user@example.com') // per-stream verdict, same
-                                                 // gate the send paths run
+sendheron.suppressions.check('user@example.com') // per-stream recipient and
+                                                 // organization verdict
 sendheron.suppressions.list({ tier: 'HARD' })
 sendheron.suppressions.add({ email, note })
 sendheron.suppressions.remove(email, { confirmHardTier: true })

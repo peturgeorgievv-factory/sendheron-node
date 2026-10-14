@@ -121,7 +121,10 @@ export type ScheduledEmailStatus =
   | 'SUPPRESSED'
   | 'FAILED';
 
-/** Returned when a send carries `sendAt`: and by `emails.cancelScheduled()`. */
+/**
+ * Returned when a send carries `sendAt`, and by `emails.cancelScheduled()`.
+ * Its `id` is for `emails.cancelScheduled()`, not for `emails.get()`.
+ */
 export interface ScheduledEmail {
   id: string;
   to: string;
@@ -168,6 +171,10 @@ export interface SendEmailPayload {
   to: string;
   subject: string;
   html: string;
+  /**
+   * Defaults to the workspace's default sender identity. With no identity
+   * configured, the send is suppressed with `SENDER_NOT_CONFIGURED`.
+   */
   from?: string;
   /** Display-name override. Max 100 chars; no CR/LF or angle brackets. */
   fromName?: string;
@@ -186,9 +193,19 @@ export interface SendTemplatePayload {
   templateId: string;
   /** Render variables. `contact.*` is auto-populated when contactId is set. */
   variables?: Record<string, unknown>;
+  /**
+   * Populates `contact.firstName`, `contact.lastName`, `contact.email` and
+   * each custom property as `contact.<key>`. For a MARKETING template it
+   * also decides whose unsubscribe link the mail carries; transactional
+   * mail carries none.
+   */
   contactId?: string;
   /** Subject override (same template syntax). */
   subject?: string;
+  /**
+   * Defaults to the workspace's default sender identity. With no identity
+   * configured, the send is suppressed with `SENDER_NOT_CONFIGURED`.
+   */
   from?: string;
   fromName?: string;
   replyTo?: string;
@@ -202,10 +219,19 @@ export interface SendTemplatePayload {
 
 export interface SendBulkPayload {
   templateId: string;
+  /**
+   * Defaults to the workspace's default sender identity. With no identity
+   * configured, every send is suppressed with `SENDER_NOT_CONFIGURED`.
+   */
   from?: string;
+  /**
+   * Template variables rendered into EVERY recipient's real mail, not
+   * preview-only data. `contact.*` is set per recipient on top.
+   */
   sampleData?: Record<string, unknown>;
   listId?: string;
   contactIds?: string[];
+  /** Every subscribed contact in the API key's workspace. */
   sendToAll?: boolean;
 }
 
@@ -261,6 +287,11 @@ export interface PreviewTemplatePayload {
   bodyHtml?: string;
   document?: Record<string, unknown>;
   emailType?: EmailType;
+  /**
+   * Channel to preview through. `CAMPAIGN` and `BULK` are always marketing,
+   * whatever the template says; `TRANSACTIONAL_API` and `CAMPAIGN_TEST` are
+   * always transactional; `SEQUENCE` and `DIRECT` follow the template.
+   */
   channel?: string;
   sampleData?: Record<string, unknown>;
 }
@@ -295,7 +326,11 @@ export interface ChannelDeliverability {
   blockReason: SendBlockReason | null;
 }
 
-/** `suppressions.check()`: the same gate function the send paths run. */
+/**
+ * `suppressions.check()`: the recipient and organization verdict
+ * (suppression tiers, contact status, sending pause). Sender configuration,
+ * list opt-outs and an archived workspace are only evaluated on a real send.
+ */
 export interface EmailDeliverability {
   email: string;
   suppressed: boolean;
@@ -326,8 +361,9 @@ export type LapsedReason =
 
 /**
  * Where the organization stands with its sender review. Until `APPROVED`,
- * mail reaches only its team members and addresses on its own verified
- * domains: every other send is suppressed with `SENDER_UNDER_REVIEW`, on
+ * mail reaches only its verified members (members who confirmed their email
+ * address) and addresses on its own verified domains: every other send,
+ * an unverified member included, is suppressed with `SENDER_UNDER_REVIEW`, on
  * every endpoint, transactional included. `SANDBOX`: no review requested
  * yet. `REQUESTED`: the organization owner asked for it and it is not
  * approved yet; same reach as `SANDBOX`. `APPROVED`: the sandbox is lifted.
@@ -359,8 +395,8 @@ export interface OrganizationUsage {
     lapsedReason: LapsedReason | null;
     /**
      * The sender review. Never null. Until `APPROVED`, a send to anyone
-     * outside your team and your own verified domains is suppressed with
-     * `SENDER_UNDER_REVIEW`.
+     * outside your verified members and your own verified domains is
+     * suppressed with `SENDER_UNDER_REVIEW`.
      */
     sendingReview: SendingReviewStatus;
   };
