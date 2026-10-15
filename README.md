@@ -110,7 +110,7 @@ sendheron.emails.send(payload)              // raw HTML
 sendheron.emails.sendTemplate(payload)      // templated; sendAt schedules it
 sendheron.emails.sendBulk(payload)          // marketing blast to contacts
 sendheron.emails.get(id)                    // read one send back: delivery
-                                            // lifecycle, opens/clicks
+                                            // lifecycle, opens/clicks by people
 sendheron.emails.cancelScheduled(id)
 
 // Templates

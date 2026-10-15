@@ -17,6 +17,9 @@ const sentRecord = {
   workspaceId: 'ws-1',
   openCount: 0,
   clickCount: 0,
+  machineOpenCount: 0,
+  machineClickCount: 0,
+  unconfirmedOpenCount: 0,
 };
 
 let server: MockServer;
@@ -657,6 +660,33 @@ describe('request shaping', () => {
     expect(JSON.parse(server.requests[1]!.body)).toEqual({
       confirmHardTier: true,
     });
+  });
+
+  it('reads machine and privacy-proxy engagement beside the people counts', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          ...sentRecord,
+          status: 'delivered',
+          deliveredAt: '2026-10-15T17:00:00.000Z',
+          machineOpenCount: 2,
+          machineClickCount: 3,
+          unconfirmedOpenCount: 1,
+        },
+      },
+    ]);
+
+    const { data, error } = await build().emails.get('log-1');
+
+    expect(error).toBeNull();
+    // Only machines and a privacy proxy touched it: delivered, never opened.
+    expect(data!.status).toBe('delivered');
+    expect(data!.openCount).toBe(0);
+    expect(data!.clickCount).toBe(0);
+    expect(data!.machineOpenCount).toBe(2);
+    expect(data!.machineClickCount).toBe(3);
+    expect(data!.unconfirmedOpenCount).toBe(1);
   });
 
   it('reads usage with nullable pool fields intact', async () => {

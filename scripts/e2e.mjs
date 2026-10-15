@@ -145,10 +145,23 @@ let sendId;
   );
 }
 
-// read the send back by id
+// read the send back by id: every engagement counter is present, people
+// and machines apart
 {
   const { data, error } = await sdk.emails.get(sendId);
-  record('emails.get', !error && data.id === sendId, error?.code);
+  record(
+    'emails.get',
+    !error &&
+      data.id === sendId &&
+      [
+        'openCount',
+        'clickCount',
+        'machineOpenCount',
+        'machineClickCount',
+        'unconfirmedOpenCount',
+      ].every((count) => typeof data[count] === 'number'),
+    error?.code,
+  );
 }
 
 // per-stream deliverability verdict

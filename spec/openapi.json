@@ -1190,7 +1190,7 @@
     },
     "/api/v1/emails/{id}": {
       "get": {
-        "description": "The record every send response returns, including delivery lifecycle written by provider events (deliveredAt, bounced, complainedAt) and open/click counts. Works for any recipient — transactional recipients are usually not contacts, and this is the read the contact-keyed listing cannot do.",
+        "description": "The record every send response returns, including delivery lifecycle written by provider events (deliveredAt, bounced, complainedAt) and open/click counts by people, with machine and privacy-proxy events counted separately. Works for any recipient — transactional recipients are usually not contacts, and this is the read the contact-keyed listing cannot do.",
         "operationId": "EmailsController_getEmail",
         "parameters": [
           {
@@ -1780,7 +1780,7 @@
     },
     "/api/v1/analytics/dashboard": {
       "get": {
-        "description": "Rates are percentages derived from real event data. deliveryRate and bounceRate are measured against messages the provider accepted (excluding suppressed and failed sends); openRate, clickRate and complaintRate are measured over delivered, matching the provider dashboard. Any rate is null when its denominator is empty — null means \"no data yet\", which is not the same as 0%. streamPerformance breaks the same metrics down by sending stream (TRANSACTIONAL / MARKETING), so marketing complaint rate and transactional delivery rate are separate numbers; a null stream groups messages sent before streams were tracked.",
+        "description": "Rates are percentages derived from real event data. deliveryRate and bounceRate are measured against messages the provider accepted (excluding suppressed and failed sends); openRate, clickRate and complaintRate are measured over delivered, matching the provider dashboard. Any rate is null when its denominator is empty — null means \"no data yet\", which is not the same as 0%. streamPerformance breaks the same metrics down by sending stream (TRANSACTIONAL / MARKETING), so marketing complaint rate and transactional delivery rate are separate numbers; a null stream groups messages sent before streams were tracked. Opens and clicks count people: security scanners, link checkers and HEAD or prefetch requests are reported separately as machineOpens and machineClicks, and pixel fetches by a mail privacy proxy (Apple Mail Privacy Protection) as unconfirmedOpens, opens nobody can confirm. Engagement recorded before this classification shipped (October 2026) was not reclassified.",
         "operationId": "AnalyticsController_getDashboard",
         "parameters": [],
         "responses": {
@@ -1807,7 +1807,7 @@
     },
     "/api/v1/analytics/campaigns/{id}": {
       "get": {
-        "description": "Same rate definitions as the dashboard endpoint: rates are null until their denominator is non-empty, and suppressed recipients are reported separately rather than counted as attempted sends.",
+        "description": "Same rate definitions as the dashboard endpoint: rates are null until their denominator is non-empty, suppressed recipients are reported separately rather than counted as attempted sends, and machine and privacy-proxy opens and clicks are reported beside the people counts, never in them.",
         "operationId": "AnalyticsController_getCampaignStats",
         "parameters": [
           {
@@ -1822,7 +1822,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Campaign analytics (sent, delivered, opened, clicked, bounced, suppressed, rates)"
+            "description": "Campaign analytics (sent, delivered, opened, clicked, bounced, suppressed, machine and unconfirmed engagement, rates)"
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"

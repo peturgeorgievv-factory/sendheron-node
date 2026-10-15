@@ -95,8 +95,9 @@ export class Emails {
   /**
    * Read one send back by the id a send response returned: including the
    * delivery lifecycle written later by provider events (deliveredAt,
-   * bounced, complainedAt) and open/click counts. Works for recipients who
-   * are not contacts.
+   * bounced, complainedAt) and open/click counts by people, with machines
+   * and privacy proxies counted beside them. Works for recipients who are
+   * not contacts.
    */
   get(id: string, options?: RequestOptions): Promise<Result<EmailSendRecord>> {
     return this.client.get(

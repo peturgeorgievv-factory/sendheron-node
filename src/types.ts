@@ -12,6 +12,9 @@ export type SendStream = 'MARKETING' | 'TRANSACTIONAL';
 /**
  * Lifecycle of one send. `suppressed` is an OUTCOME, not an error: the
  * compliance gate refused the send and recorded why: never retry those.
+ * `opened` and `clicked` mean a person opened or clicked. A send that only
+ * machines touched (security scanners, link checkers, a privacy proxy
+ * fetching the pixel) reads `delivered`: their events still prove delivery.
  */
 export type EmailSendStatus =
   | 'queued'
@@ -78,7 +81,16 @@ export const RECIPIENT_BLOCK_REASONS = [
 export const isSenderSideBlock = (reason: string | null | undefined): boolean =>
   (SENDER_SIDE_BLOCK_REASONS as readonly string[]).includes(reason ?? '');
 
-/** The send record every send route returns and `emails.get()` reads back. */
+/**
+ * The send record every send route returns and `emails.get()` reads back.
+ *
+ * Opens and clicks count people: `openCount`, `clickCount`, the first and
+ * last opened and clicked timestamps, and the `opened` and `clicked`
+ * statuses. Machines are counted beside them, never in them. Counts land 5
+ * to 15 s after the open or click. Engagement recorded before the API began
+ * separating machines from people (2026-10-15) was not reclassified, so it
+ * still includes machines.
+ */
 export interface EmailSendRecord {
   id: string;
   to: string;
@@ -106,10 +118,27 @@ export interface EmailSendRecord {
   complainedAt?: string | null;
   firstOpenedAt?: string | null;
   lastOpenedAt?: string | null;
+  /** Opens by people. */
   openCount: number;
   firstClickedAt?: string | null;
   lastClickedAt?: string | null;
+  /** Clicks by people. */
   clickCount: number;
+  /**
+   * Opens by security scanners, link checkers and HEAD or prefetch
+   * requests.
+   */
+  machineOpenCount: number;
+  /**
+   * Clicks by security scanners, link checkers and HEAD or prefetch
+   * requests.
+   */
+  machineClickCount: number;
+  /**
+   * Pixel fetches by a mail privacy proxy (Apple Mail Privacy Protection):
+   * maybe a reader, maybe nobody.
+   */
+  unconfirmedOpenCount: number;
   createdAt?: string;
 }
 

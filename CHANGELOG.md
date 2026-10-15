@@ -1,9 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
-No code or type change. The API changed underneath the SDK (live since
-2026-10-14), in ways an integration can observe:
+Additive: every field that existed keeps its shape.
+
+- `EmailSendRecord` gains `machineOpenCount`, `machineClickCount` and
+  `unconfirmedOpenCount`, on every send response and on `emails.get()`.
+  Like `openCount`, they are always present and start at 0. Security
+  scanners, link checkers and HEAD or prefetch requests count in the two
+  machine counters, and Apple Mail Privacy Protection pixel fetches, opens
+  nobody can confirm, in `unconfirmedOpenCount`.
+- From 2026-10-15, when the API began separating machines from people,
+  `openCount`, `clickCount`, the first and last opened and clicked
+  timestamps, and the `opened` and `clicked` statuses count people only.
+  Engagement recorded before then was not reclassified and still includes
+  machines, so open and click figures step down from that date, most for
+  recipients behind corporate security gateways. Counts land 5 to 15 s
+  after the open or click.
+- A send that only machines touched, a privacy proxy included, now reads
+  `delivered`, not `opened` or `clicked`: their events still prove
+  delivery, but only a person opens or clicks.
+
+The API also changed underneath the SDK on 2026-10-14, with no code or type
+change here, in ways an integration can observe:
 
 - `suppressions.check()` validates the address: a malformed or empty one
   now resolves to a 400 error instead of a verdict. It is the rule
