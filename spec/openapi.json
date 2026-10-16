@@ -1137,7 +1137,7 @@
     },
     "/api/v1/emails/send": {
       "post": {
-        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, or \"suppressed\" with the block reason in errorMessage when the compliance gate refused (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId. With sendAt the response is the scheduled email instead: its id is for DELETE /api/v1/emails/scheduled/{id}, not for GET /api/v1/emails/{id}.",
+        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, \"suppressed\" with the block reason in errorMessage when the compliance gate refused, or \"queued\" with a holdReason and heldUntil when it waits for daily capacity or new-sender warm-up and goes out by itself (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key; so does a send with attachments that would have to wait (emailSending.sendHeld), because attachments are never stored. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId. With sendAt the response is the scheduled email instead: its id is for DELETE /api/v1/emails/scheduled/{id}, not for GET /api/v1/emails/{id}.",
         "operationId": "EmailsController_sendEmail",
         "parameters": [
           {
@@ -1162,7 +1162,7 @@
         },
         "responses": {
           "201": {
-            "description": "The send record — status \"sent\", or \"suppressed\" with the refusal reason in errorMessage. When sendAt is set, the scheduled email instead."
+            "description": "The send record — status \"sent\", \"suppressed\" with the refusal reason in errorMessage, or \"queued\" with holdReason and heldUntil while it waits. When sendAt is set, the scheduled email instead."
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"
@@ -1174,7 +1174,7 @@
             "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
           },
           "503": {
-            "description": "The provider refused the send. The FAILED attempt is recorded; retry with the same idempotency key."
+            "description": "The provider refused the send, or a send with attachments would have had to wait (emailSending.sendHeld). The FAILED attempt is recorded; retry with the same idempotency key."
           }
         },
         "security": [
@@ -1190,7 +1190,7 @@
     },
     "/api/v1/emails/{id}": {
       "get": {
-        "description": "The record every send response returns, including delivery lifecycle written by provider events (deliveredAt, bounced, complainedAt) and open/click counts by people, with machine and privacy-proxy events counted separately. Works for any recipient — transactional recipients are usually not contacts, and this is the read the contact-keyed listing cannot do.",
+        "description": "The record every send response returns, including delivery lifecycle written by provider events (deliveredAt, bounced, complainedAt) and open/click counts by people, with machine and privacy-proxy events counted separately. A held send reads status \"queued\" with holdReason and heldUntil until it goes, on this same record. Works for any recipient — transactional recipients are usually not contacts, and this is the read the contact-keyed listing cannot do.",
         "operationId": "EmailsController_getEmail",
         "parameters": [
           {
@@ -1282,7 +1282,7 @@
     },
     "/api/v1/emails/send-template": {
       "post": {
-        "description": "Renders a template with the provided variables and sends it. With sendAt, the template REFERENCE is stored and rendering, the contact merge and every gate run when it fires. A 201 is an OUTCOME: status \"sent\", or \"suppressed\" with the block reason in errorMessage (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key. A template that fails to compile is a 400 (templates.renderFailed). Attachments require a TRANSACTIONAL template.",
+        "description": "Renders a template with the provided variables and sends it. With sendAt, the template REFERENCE is stored and rendering, the contact merge and every gate run when it fires. A 201 is an OUTCOME: status \"sent\", \"suppressed\" with the block reason in errorMessage, or \"queued\" with a holdReason while it waits for capacity (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key; so does a send with attachments that would have to wait (emailSending.sendHeld). A template that fails to compile is a 400 (templates.renderFailed). Attachments require a TRANSACTIONAL template.",
         "operationId": "EmailsController_sendTemplateEmail",
         "parameters": [
           {
@@ -1307,7 +1307,7 @@
         },
         "responses": {
           "201": {
-            "description": "The send record — status \"sent\", or \"suppressed\" with the refusal reason in errorMessage. When sendAt is set, the scheduled email instead."
+            "description": "The send record — status \"sent\", \"suppressed\" with the refusal reason in errorMessage, or \"queued\" with holdReason and heldUntil while it waits. When sendAt is set, the scheduled email instead."
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"
@@ -1322,7 +1322,7 @@
             "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
           },
           "503": {
-            "description": "The provider refused the send. The FAILED attempt is recorded; retry with the same idempotency key."
+            "description": "The provider refused the send, or a send with attachments would have had to wait (emailSending.sendHeld). The FAILED attempt is recorded; retry with the same idempotency key."
           }
         },
         "security": [
@@ -1338,6 +1338,7 @@
     },
     "/api/v1/emails/send-bulk": {
       "post": {
+        "description": "Queues one send per eligible recipient, paced per organization. A recipient can wait for daily capacity or new-sender warm-up: its send record reads status \"queued\" with a holdReason until it goes out by itself.",
         "operationId": "EmailsController_sendBulkEmail",
         "parameters": [
           {
@@ -2452,12 +2453,12 @@
     },
     "/api/v1/usage": {
       "get": {
-        "description": "The organization-wide pool the plan gates enforce: pool size, sends consumed this UTC calendar month, what remains for marketing and for transactional (pool + grace), when the counter resets, and the contact cap against subscribed contacts. plan.trialEndsAt is set while the plan is still trialing (the trial ceilings apply until then); plan.lapsedReason says why a LAPSED organization is refused: NEVER_SUBSCRIBED, TRIAL_EXPIRED (nothing was ever paid, so no transactional grace either), PAYMENT_FAILED (Stripe is retrying the charge) or CANCELED. plan.sendingReview is SANDBOX or REQUESTED until a person has reviewed the organization as a sender; until then every send to an address outside your own verified domains and team members is suppressed with SENDER_UNDER_REVIEW, on every endpoint. Monitor this instead of discovering the trial ended, the charge failed, or the review is pending, from a send failing. domains, workspaces and teamMembers report the remaining plan caps the same way (used, cap, remaining); workspaces honours a per-organization override, and a pending invitation already holds a seat. Also reports the API rate ceilings — the same constants the rate-limit guard enforces.",
+        "description": "The organization-wide pool the plan gates enforce: pool size, sends consumed this UTC calendar month, what remains for marketing and for transactional (pool + grace), when the counter resets, and the contact cap against subscribed contacts. plan.trialEndsAt is set while the plan is still trialing (the trial ceilings apply until then); plan.lapsedReason says why a LAPSED organization is refused: NEVER_SUBSCRIBED, TRIAL_EXPIRED (nothing was ever paid, so no transactional grace either), PAYMENT_FAILED (Stripe is retrying the charge) or CANCELED. plan.sendingReview is SANDBOX or REQUESTED until a person has reviewed the organization as a sender; until then every send to an address outside your own verified domains and team members is suppressed with SENDER_UNDER_REVIEW, on every endpoint. Monitor this instead of discovering the trial ended, the charge failed, or the review is pending, from a send failing. domains, workspaces and teamMembers report the remaining plan caps the same way (used, cap, remaining); workspaces honours a per-organization override, and a pending invitation already holds a seat. sending reports the rolling 24-hour position on the shared sending quota: recipients sent (last24Hours, transactionalLast24Hours), its share, its earnedVolume, the marketingRemaining that fits now, whether the platform marketing line is reached, how many sends are held, and the new-sender warm-up (status WARMING, HELD or COMPLETE, the sampleSize of a slice, heldStreams). Also reports the API rate ceilings — the same constants the rate-limit guard enforces.",
         "operationId": "UsageController_getUsage",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Plan position (status, name, trialEndsAt, lapsedReason), monthly send usage, contact usage, and rate ceilings"
+            "description": "Plan position (status, name, trialEndsAt, lapsedReason), monthly send usage, contact usage, daily sending position, and rate ceilings"
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"
@@ -2477,7 +2478,7 @@
   },
   "info": {
     "title": "SendHeron API",
-    "description": "Public REST API for managing contacts, tags, sequences, enrollments, templates, emails, suppressions, sending domains and identities, analytics, and usage.\n\n## Authentication\nAll endpoints require a Bearer token (API key) in the `Authorization` header.\nGenerate API keys from the dashboard under Settings > API Keys.\n\n## Rate Limiting\nTwo one-minute ceilings apply to every request: a per-key limit, and a per-organization limit split by READ / WRITE / SEND so that reads cannot exhaust the sending budget. There is no hourly or daily quota — the multi-window throttler applies to the GraphQL dashboard API, not to this one.\nResponses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`; a `429` also carries `Retry-After`, and its headers name the ceiling (per-key, per-route or per-organization) that refused the request. A `429` never consumes an idempotency key. Current ceilings are readable at `GET /api/v1/usage`.\n\n## Send outcomes\nA `201` from a send route is an outcome, not proof of dispatch: `status` is `sent`, or `suppressed` with the machine-readable block reason in `errorMessage` (never retry those). Provider failures are `503` with the FAILED attempt recorded — retry with the same idempotency key. Anything else 4xx is a request bug.\n\n## Scopes\nAPI keys are scoped to specific permissions. Every scope an endpoint lists is required, and they are not alternatives. Available scopes: `contacts:read`, `contacts:write`, `sequences:read`, `sequences:write`, `templates:read`, `templates:write`, `analytics:read`, `emails:send`, `suppressions:read`, `suppressions:write`, `sending:read`, `sending:write`.",
+    "description": "Public REST API for managing contacts, tags, sequences, enrollments, templates, emails, suppressions, sending domains and identities, analytics, and usage.\n\n## Authentication\nAll endpoints require a Bearer token (API key) in the `Authorization` header.\nGenerate API keys from the dashboard under Settings > API Keys.\n\n## Rate Limiting\nTwo one-minute ceilings apply to every request: a per-key limit, and a per-organization limit split by READ / WRITE / SEND so that reads cannot exhaust the sending budget. These limit requests; how much mail goes out in a day is under Daily sending. The multi-window throttler applies to the GraphQL dashboard API, not to this one.\nResponses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`; a `429` also carries `Retry-After`, and its headers name the ceiling (per-key, per-route or per-organization) that refused the request. A `429` never consumes an idempotency key. Current ceilings are readable at `GET /api/v1/usage`.\n\n## Send outcomes\nA `201` from a send route is an outcome, not proof of dispatch: `status` is `sent`; or `suppressed` with the machine-readable block reason in `errorMessage` (never retry those); or `queued` with a `holdReason`, a send that waits for capacity and goes out by itself (never retry those either). Provider failures are `503` with the FAILED attempt recorded — retry with the same idempotency key. Anything else 4xx is a request bug.\n\n## Daily sending\nMail leaves through one shared sending account with a rolling 24-hour quota, counted per recipient (to, cc and bcc). Marketing waits once the platform reaches 80% of that quota, which keeps the rest for transactional mail; transactional waits only once the quota itself is spent.\n\nNo organization takes more than 40% of the quota: its marketing waits once everything it sent reaches that share, its transactional only once its transactional alone does. Marketing also waits above the volume the organization has proven it sends cleanly: its best day in the last 30 days times 2, and never less than 1,000 a day.\n\nNew senders warm up. Mail to an address the organization has never mailed goes out in small slices, and the next slice waits until the last one's bounces and complaints are known: 60 minutes, or 30 when people are already opening it. A slice that bounces or draws complaints past the line keeps the rest waiting until we have looked at it. Mail to people the organization already reached is never slowed by warm-up.\n\nA send that waits is neither refused nor lost: the send route answers `201` with `status` `queued`, the reason in `holdReason` and the next attempt in `heldUntil`, and the same record (`GET /api/v1/emails/{id}`) turns `sent` when it goes. Do not retry it. Attachments are never stored, so a send carrying them cannot wait: where it would, it answers `503` with `emailSending.sendHeld`; retry with the same idempotency key later. `GET /api/v1/usage` reports the position under `sending`.\n\n## Scopes\nAPI keys are scoped to specific permissions. Every scope an endpoint lists is required, and they are not alternatives. Available scopes: `contacts:read`, `contacts:write`, `sequences:read`, `sequences:write`, `templates:read`, `templates:write`, `analytics:read`, `emails:send`, `suppressions:read`, `suppressions:write`, `sending:read`, `sending:write`.",
     "version": "1.0",
     "contact": {}
   },

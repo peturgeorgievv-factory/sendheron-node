@@ -29,4 +29,10 @@ if (usage) {
   console.log(
     `pool: ${used} used, transactional remaining: ${transactionalRemaining ?? 'uncapped'}, resets ${resetsAt}`,
   );
+  if (usage.sending) {
+    const { held, marketingRemaining, warmup } = usage.sending;
+    console.log(
+      `today: ${held} held, marketing that fits now: ${marketingRemaining ?? 'unknown'}, warm-up ${warmup.status}`,
+    );
+  }
 }

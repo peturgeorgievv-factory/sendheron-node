@@ -12,6 +12,9 @@ export type SendStream = 'MARKETING' | 'TRANSACTIONAL';
 /**
  * Lifecycle of one send. `suppressed` is an OUTCOME, not an error: the
  * compliance gate refused the send and recorded why: never retry those.
+ * `queued` with a `holdReason` is a held send (`isHeld`): it waits for daily
+ * capacity or a new sender's warm-up and goes out by itself, so never retry
+ * those either.
  * `opened` and `clicked` mean a person opened or clicked. A send that only
  * machines touched (security scanners, link checkers, a privacy proxy
  * fetching the pixel) reads `delivered`: their events still prove delivery.
@@ -82,6 +85,34 @@ export const isSenderSideBlock = (reason: string | null | undefined): boolean =>
   (SENDER_SIDE_BLOCK_REASONS as readonly string[]).includes(reason ?? '');
 
 /**
+ * Why a send is waiting instead of going out now. Carried in `holdReason`
+ * when `status` is `queued`. Waiting is not failing: the send goes out by
+ * itself, on the same record, once the cause clears. Stable,
+ * machine-readable values.
+ *
+ * - `PLATFORM_DAILY_LIMIT`: the shared 24-hour sending quota reached its
+ *   marketing line, or, for transactional mail, is spent.
+ * - `ORGANIZATION_DAILY_SHARE`: the organization used its share of that
+ *   quota.
+ * - `EARNED_VOLUME`: marketing above the daily volume the organization has
+ *   proven it sends cleanly.
+ * - `WARMUP_SAMPLE`: a new sender's mail to never-mailed addresses goes out
+ *   in checked slices, and this send waits for the next one.
+ * - `WARMUP_SAMPLE_FAILED`: a slice crossed the bounce or complaint line, so
+ *   new-address mail on that stream waits until a person at SendHeron has
+ *   looked at it.
+ */
+export const SEND_HOLD_REASONS = [
+  'PLATFORM_DAILY_LIMIT',
+  'ORGANIZATION_DAILY_SHARE',
+  'EARNED_VOLUME',
+  'WARMUP_SAMPLE',
+  'WARMUP_SAMPLE_FAILED',
+] as const;
+
+export type SendHoldReason = (typeof SEND_HOLD_REASONS)[number];
+
+/**
  * The send record every send route returns and `emails.get()` reads back.
  *
  * Opens and clicks count people: `openCount`, `clickCount`, the first and
@@ -96,7 +127,10 @@ export interface EmailSendRecord {
   to: string;
   /** The RESOLVED sender: not necessarily what you passed. */
   from: string | null;
-  /** The rendered subject. */
+  /**
+   * The rendered subject. A templated send that was suppressed, or is still
+   * held, records the template's subject unrendered.
+   */
   subject: string;
   templateId?: string | null;
   campaignId?: string | null;
@@ -108,9 +142,29 @@ export interface EmailSendRecord {
   status: EmailSendStatus;
   /**
    * When `status` is `suppressed`: a SendBlockReason value.
-   * When `failed`/`bounced`: provider diagnostics.
+   * When `failed`/`bounced`: diagnostics, usually the provider's. A send
+   * with attachments that could not wait (503 `emailSending.sendHeld`)
+   * records the SendHoldReason here.
    */
   errorMessage?: string | null;
+  /**
+   * Why the send is waiting (status `queued`): see SEND_HOLD_REASONS and
+   * `isHeld`. It is tried again at `heldUntil`, goes out by itself on this
+   * record, and is cleared when it does. Null or absent when nothing is
+   * waiting.
+   */
+  holdReason?: SendHoldReason | null;
+  /**
+   * When a held send is next tried, ISO-8601. It can be held again then,
+   * with a later `heldUntil`. Null or absent when nothing is waiting.
+   */
+  heldUntil?: string | null;
+  /**
+   * True when the send counted in a new sender's warm-up slice: the
+   * organization had never mailed this address. A held send reads false
+   * until it goes.
+   */
+  warmupFirstContact: boolean;
   organizationId: string;
   workspaceId: string;
   sentAt?: string | null;
@@ -142,6 +196,21 @@ export interface EmailSendRecord {
   createdAt?: string;
 }
 
+/**
+ * True when a send is held: status `queued` with a `holdReason`. It waits
+ * for daily capacity or a new sender's warm-up and goes out by itself, on
+ * the same record (`emails.get(id)` reads its outcome once it has gone).
+ * Never retry it: a new idempotency key would send it twice, and the same
+ * key replays the held response. Any `holdReason` counts, including one
+ * this SDK version does not know yet: it is waiting all the same.
+ */
+export const isHeld = <
+  T extends { status: string; holdReason?: string | null },
+>(
+  record: T,
+): record is T & { status: 'queued'; holdReason: string } =>
+  record.status === 'queued' && !!record.holdReason;
+
 export type ScheduledEmailStatus =
   | 'SCHEDULED'
   | 'DISPATCHING'
@@ -170,7 +239,11 @@ export interface ScheduledEmail {
   contactId?: string | null;
   sendAt: string;
   status: ScheduledEmailStatus;
-  /** Set once dispatched: the send record carrying the outcome. */
+  /**
+   * Set once it fires: the send record carrying the outcome. A send held
+   * when it fires is `SCHEDULED` again at a later `sendAt`, and its record
+   * reads `queued` with a `holdReason` meanwhile.
+   */
   emailSendLogId?: string | null;
   errorMessage?: string | null;
   organizationId: string;
@@ -411,6 +484,61 @@ export interface CountUsage {
   remaining: number | null;
 }
 
+/**
+ * The new-sender warm-up. `WARMING`: mail to addresses the organization has
+ * never mailed goes out in checked slices. `HELD`: a slice crossed the
+ * bounce or complaint line, and new-address mail on `heldStreams` waits for
+ * a person at SendHeron. `COMPLETE`: warm-up is over. It only slows mail
+ * once `plan.sendingReview` is `APPROVED`: before that, the review sandbox
+ * decides who can be reached.
+ */
+export type WarmupStatus = 'WARMING' | 'HELD' | 'COMPLETE';
+
+export interface WarmupUsage {
+  status: WarmupStatus;
+  /** When warm-up completed, ISO-8601. Null until it has. */
+  completedAt: string | null;
+  /** Never-mailed addresses each stream may have waiting for their check. */
+  sampleSize: number;
+  /** The streams whose new-address mail waits for a person (`HELD`). */
+  heldStreams: SendStream[];
+}
+
+/**
+ * The organization's place in the shared rolling 24-hour sending quota.
+ * Counts are recipients (to, cc and bcc). Not a plan cap: mail over a line
+ * waits as a held send (`isHeld`) and goes out by itself.
+ */
+export interface SendingCapacityUsage {
+  /**
+   * Recipients sent in the rolling 24 hours, both streams. Null when
+   * unreadable.
+   */
+  last24Hours: number | null;
+  /** The transactional part of `last24Hours`. Null when unreadable. */
+  transactionalLast24Hours: number | null;
+  /**
+   * The most of the shared quota one organization may take. Null when the
+   * quota is unlimited.
+   */
+  share: number | null;
+  /**
+   * The daily volume the organization has proven it sends cleanly:
+   * marketing above it waits.
+   */
+  earnedVolume: number;
+  /** Marketing recipients that still fit right now. Null when unreadable. */
+  marketingRemaining: number | null;
+  /**
+   * The platform reached its daily marketing line: everyone's marketing
+   * waits for the window.
+   */
+  platformMarketingHeld: boolean;
+  /** Sends waiting now (status `queued` with a `holdReason`). */
+  held: number;
+  warmup: WarmupUsage;
+}
+
 export interface OrganizationUsage {
   plan: {
     status: PlanGateStatus;
@@ -458,6 +586,11 @@ export interface OrganizationUsage {
   workspaces: CountUsage;
   /** Team members, pending invitations included: an invitation holds a seat. */
   teamMembers: CountUsage;
+  /**
+   * The rolling 24-hour position on the shared sending quota, and the
+   * new-sender warm-up. Null when the position cannot be reported.
+   */
+  sending: SendingCapacityUsage | null;
   rateLimits: {
     perKeyPerMinute: number;
     organizationPerMinute: {

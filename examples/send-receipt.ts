@@ -25,10 +25,15 @@ const { data, error } = await sendheron.emails.sendTemplate(
 );
 
 if (error) {
+  // A 503 emailSending.sendHeld means the send would have had to wait for
+  // daily capacity or a new sender's warm-up, and attachments are never
+  // stored: error.retryable is true, so send it again later with the same
+  // key.
   console.error(`Send failed (${error.statusCode}): ${error.code}`);
   process.exit(1);
 }
 
+// With attachments a 201 is never held (`queued`): it is sent or suppressed.
 if (data.status === 'suppressed') {
   console.warn(`Refused by the compliance gate: ${data.errorMessage}`);
 } else {

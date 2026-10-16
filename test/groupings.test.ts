@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type EmailSendRecord,
+  type EmailSendStatus,
+  isHeld,
   isSenderSideBlock,
   RECIPIENT_BLOCK_REASONS,
   SEND_BLOCK_REASONS,
+  SEND_HOLD_REASONS,
   SENDER_SIDE_BLOCK_REASONS,
   SendHeronError,
+  type SendHoldReason,
 } from '../src/index.js';
 
 describe('block reason groupings', () => {
@@ -32,6 +37,69 @@ describe('block reason groupings', () => {
   });
 });
 
+describe('held sends', () => {
+  type HoldFields = Pick<EmailSendRecord, 'status' | 'holdReason'>;
+
+  it('SEND_HOLD_REASONS lists exactly the API hold reasons', () => {
+    // The backend's SendHoldReason enum (email-automation-service #143).
+    expect([...SEND_HOLD_REASONS]).toEqual([
+      'PLATFORM_DAILY_LIMIT',
+      'ORGANIZATION_DAILY_SHARE',
+      'EARNED_VOLUME',
+      'WARMUP_SAMPLE',
+      'WARMUP_SAMPLE_FAILED',
+    ]);
+  });
+
+  it('isHeld is true for a queued send with any known hold reason', () => {
+    for (const holdReason of SEND_HOLD_REASONS) {
+      expect(isHeld({ status: 'queued', holdReason })).toBe(true);
+    }
+  });
+
+  it('isHeld counts a reason this SDK does not know yet: it is waiting all the same', () => {
+    expect(isHeld({ status: 'queued', holdReason: 'SOME_FUTURE_HOLD' })).toBe(
+      true,
+    );
+  });
+
+  it('isHeld is false without a hold reason, and for every other status', () => {
+    expect(isHeld({ status: 'queued' })).toBe(false);
+    expect(isHeld({ status: 'queued', holdReason: null })).toBe(false);
+
+    // Even with a reason still on it, kept from the 201 say: the send has
+    // moved on, so nothing is waiting.
+    const movedOn: EmailSendStatus[] = [
+      'sent',
+      'delivered',
+      'opened',
+      'clicked',
+      'bounced',
+      'failed',
+      'suppressed',
+    ];
+    for (const status of movedOn) {
+      expect(isHeld({ status, holdReason: 'PLATFORM_DAILY_LIMIT' })).toBe(
+        false,
+      );
+    }
+  });
+
+  it('isHeld narrows holdReason, so no null is left to handle', () => {
+    const record: HoldFields = {
+      status: 'queued',
+      holdReason: 'WARMUP_SAMPLE',
+    };
+    if (!isHeld(record)) {
+      throw new Error('expected a held send');
+    }
+    // Compile-time half of the test: this assignment type-checks only
+    // because isHeld removed null and undefined.
+    const reason: SendHoldReason = record.holdReason;
+    expect(reason).toBe('WARMUP_SAMPLE');
+  });
+});
+
 describe('error.retryable', () => {
   const error = (statusCode: number | null, code = 'x') =>
     new SendHeronError({ statusCode, code });
@@ -40,6 +108,8 @@ describe('error.retryable', () => {
     expect(error(429).retryable).toBe(true);
     expect(error(500).retryable).toBe(true);
     expect(error(503).retryable).toBe(true);
+    // Attachments could not wait for capacity: retry later with the same key.
+    expect(error(503, 'emailSending.sendHeld').retryable).toBe(true);
     expect(error(null, 'network_error').retryable).toBe(true);
     expect(error(null, 'timeout').retryable).toBe(true);
   });

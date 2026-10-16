@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { type CountUsage, SendHeron, SendHeronError } from '../src/index.js';
+import {
+  type CountUsage,
+  isHeld,
+  SendHeron,
+  SendHeronError,
+  type SendingCapacityUsage,
+  type WarmupStatus,
+  type WarmupUsage,
+} from '../src/index.js';
 import { type MockServer, startMockServer } from './mock-server.js';
 
 const KEY = 'ema_live_test_key';
@@ -20,6 +28,24 @@ const sentRecord = {
   machineOpenCount: 0,
   machineClickCount: 0,
   unconfirmedOpenCount: 0,
+  warmupFirstContact: false,
+};
+
+/** A new organization's daily position: inside every line, warming up. */
+const sendingPosition = {
+  last24Hours: 120,
+  transactionalLast24Hours: 80,
+  share: 20_000,
+  earnedVolume: 1_000,
+  marketingRemaining: 880,
+  platformMarketingHeld: false,
+  held: 0,
+  warmup: {
+    status: 'WARMING',
+    completedAt: null,
+    sampleSize: 100,
+    heldStreams: [],
+  },
 };
 
 let server: MockServer;
@@ -103,6 +129,79 @@ describe('send outcomes', () => {
     });
     // One request: a suppression is an outcome and must never be retried.
     expect(server.requests).toHaveLength(1);
+  });
+
+  it('passes a held 201 through as DATA, never retried', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          ...sentRecord,
+          status: 'queued',
+          providerMessageId: undefined,
+          holdReason: 'PLATFORM_DAILY_LIMIT',
+          heldUntil: '2026-10-16T11:10:00.000Z',
+        },
+      },
+    ]);
+
+    const { data, error } = await build().emails.send({
+      to: 'user@example.com',
+      subject: 'Receipt',
+      html: '<p>x</p>',
+    });
+
+    expect(error).toBeNull();
+    expect(isHeld(data!)).toBe(true);
+    expect(data).toMatchObject({
+      status: 'queued',
+      holdReason: 'PLATFORM_DAILY_LIMIT',
+      heldUntil: '2026-10-16T11:10:00.000Z',
+      warmupFirstContact: false,
+    });
+    // One request: a held send goes out by itself. Retrying with a new key
+    // would send it twice.
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('reads a held send back on the same record until it goes out', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          ...sentRecord,
+          status: 'queued',
+          providerMessageId: null,
+          holdReason: 'WARMUP_SAMPLE',
+          heldUntil: '2026-10-16T11:40:00.000Z',
+        },
+      },
+      {
+        status: 200,
+        body: {
+          ...sentRecord,
+          holdReason: null,
+          heldUntil: null,
+          warmupFirstContact: true,
+        },
+      },
+    ]);
+    const sdk = build();
+
+    const waiting = await sdk.emails.get('log-1');
+    expect(isHeld(waiting.data!)).toBe(true);
+    // Counted in a warm-up slice only once it is admitted.
+    expect(waiting.data!.warmupFirstContact).toBe(false);
+
+    const gone = await sdk.emails.get('log-1');
+    expect(isHeld(gone.data!)).toBe(false);
+    expect(gone.data).toMatchObject({
+      id: 'log-1',
+      status: 'sent',
+      holdReason: null,
+      heldUntil: null,
+      warmupFirstContact: true,
+    });
   });
 
   it('surfaces API errors as typed values, never throws', async () => {
@@ -209,6 +308,35 @@ describe('retries', () => {
     expect(server.requests[0]!.headers['idempotency-key']).toBe(
       server.requests[1]!.headers['idempotency-key'],
     );
+  });
+
+  it('retries a 503 sendHeld with the SAME key and exposes it for resume', async () => {
+    // Attachments are never stored, so a send carrying them cannot wait:
+    // the API answers 503 instead, retryable like a provider failure.
+    server = await startMockServer([
+      {
+        status: 503,
+        body: { statusCode: 503, message: 'emailSending.sendHeld' },
+      },
+    ]);
+
+    const { error } = await build(1).emails.send({
+      to: 'a@b.co',
+      subject: 's',
+      html: '<p>x</p>',
+      attachments: [
+        { content: 'JVBERi0=', filename: 'r.pdf', type: 'application/pdf' },
+      ],
+    });
+
+    expect(server.requests).toHaveLength(2);
+    const key = server.requests[0]!.headers['idempotency-key'];
+    expect(server.requests[1]!.headers['idempotency-key']).toBe(key);
+    expect(error!.statusCode).toBe(503);
+    expect(error!.code).toBe('emailSending.sendHeld');
+    expect(error!.retryable).toBe(true);
+    // Resume the SAME logical send later: a fresh key could double-send.
+    expect(error!.idempotencyKey).toBe(key);
   });
 
   it('honors Retry-After on 429', async () => {
@@ -713,6 +841,7 @@ describe('request shaping', () => {
           domains: { used: 3, cap: null, remaining: null },
           workspaces: { used: 4, cap: null, remaining: null },
           teamMembers: { used: 6, cap: null, remaining: null },
+          sending: null,
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -732,6 +861,7 @@ describe('request shaping', () => {
       expect(count.cap).toBeNull();
       expect(count.remaining).toBeNull();
     }
+    expect(data!.sending).toBeNull();
   });
 
   it('reads the trial deadline and the contact cap on a trialing plan', async () => {
@@ -758,6 +888,7 @@ describe('request shaping', () => {
           domains: { used: 1, cap: 2, remaining: 1 },
           workspaces: { used: 2, cap: 3, remaining: 1 },
           teamMembers: { used: 3, cap: 4, remaining: 1 },
+          sending: sendingPosition,
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -797,6 +928,7 @@ describe('request shaping', () => {
           domains: { used: 1, cap: 0, remaining: 0 },
           workspaces: { used: 2, cap: 0, remaining: 0 },
           teamMembers: { used: 4, cap: 0, remaining: 0 },
+          sending: sendingPosition,
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -841,6 +973,7 @@ describe('request shaping', () => {
           domains: { used: 1, cap: 2, remaining: 1 },
           workspaces: { used: 1, cap: 3, remaining: 2 },
           teamMembers: { used: 1, cap: 4, remaining: 3 },
+          sending: sendingPosition,
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -881,6 +1014,7 @@ describe('request shaping', () => {
           domains: { used: 3, cap: 4, remaining: 1 },
           workspaces: { used: 12, cap: 20, remaining: 8 },
           teamMembers: { used: 7, cap: 12, remaining: 5 },
+          sending: sendingPosition,
           rateLimits: {
             perKeyPerMinute: 100,
             organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
@@ -898,5 +1032,126 @@ describe('request shaping', () => {
     ];
     expect(caps.map((count) => count.remaining)).toEqual([1, 8, 5]);
     expect(data!.teamMembers).toEqual({ used: 7, cap: 12, remaining: 5 });
+  });
+
+  it('reads the daily sending position while the platform holds marketing', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'ACTIVE',
+            name: 'Growth',
+            trialEndsAt: null,
+            lapsedReason: null,
+            sendingReview: 'APPROVED',
+          },
+          monthlySends: {
+            used: 9200,
+            pool: 20000,
+            marketingRemaining: 10800,
+            transactionalCeiling: 22000,
+            transactionalRemaining: 12800,
+            resetsAt: '2026-11-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 5400, cap: 8000, remaining: 2600 },
+          domains: { used: 3, cap: 4, remaining: 1 },
+          workspaces: { used: 12, cap: 20, remaining: 8 },
+          teamMembers: { used: 7, cap: 12, remaining: 5 },
+          sending: {
+            last24Hours: 3100,
+            transactionalLast24Hours: 600,
+            share: 20_000,
+            earnedVolume: 6_400,
+            marketingRemaining: 0,
+            platformMarketingHeld: true,
+            held: 37,
+            warmup: {
+              status: 'COMPLETE',
+              completedAt: '2026-10-16T10:28:00.000Z',
+              sampleSize: 640,
+              heldStreams: [],
+            },
+          },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    const sending: SendingCapacityUsage = data!.sending!;
+    // Under its own lines, yet nothing more fits today: the platform's
+    // marketing line holds everyone's marketing until the window moves.
+    expect(sending.platformMarketingHeld).toBe(true);
+    expect(sending.marketingRemaining).toBe(0);
+    expect(sending.held).toBe(37);
+    const warmup: WarmupUsage = sending.warmup;
+    expect(warmup.status).toBe('COMPLETE');
+    expect(warmup.completedAt).toBe('2026-10-16T10:28:00.000Z');
+  });
+
+  it('reads a held warm-up slice, and daily counts it cannot read as null', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'ACTIVE',
+            name: 'Starter',
+            trialEndsAt: null,
+            lapsedReason: null,
+            sendingReview: 'APPROVED',
+          },
+          monthlySends: {
+            used: 310,
+            pool: 5000,
+            marketingRemaining: 4690,
+            transactionalCeiling: 5500,
+            transactionalRemaining: 5190,
+            resetsAt: '2026-11-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 900, cap: 2000, remaining: 1100 },
+          domains: { used: 1, cap: 2, remaining: 1 },
+          workspaces: { used: 1, cap: 3, remaining: 2 },
+          teamMembers: { used: 2, cap: 4, remaining: 2 },
+          sending: {
+            last24Hours: null,
+            transactionalLast24Hours: null,
+            share: 20_000,
+            earnedVolume: 1_000,
+            marketingRemaining: null,
+            platformMarketingHeld: false,
+            held: 214,
+            warmup: {
+              status: 'HELD',
+              completedAt: null,
+              sampleSize: 100,
+              heldStreams: ['MARKETING'],
+            },
+          },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    const sending = data!.sending!;
+    // The slice crossed the bounce or complaint line: new-address marketing
+    // waits for a person, while transactional keeps going.
+    const status: WarmupStatus = sending.warmup.status;
+    expect(status).toBe('HELD');
+    expect(sending.warmup.heldStreams).toEqual(['MARKETING']);
+    expect(sending.held).toBe(214);
+    expect(sending.last24Hours).toBeNull();
+    expect(sending.transactionalLast24Hours).toBeNull();
+    expect(sending.marketingRemaining).toBeNull();
   });
 });
