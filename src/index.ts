@@ -13,7 +13,7 @@ export { VERSION } from './version.js';
  * The SendHeron API client.
  *
  * ```ts
- * import { SendHeron } from 'sendheron';
+ * import { isHeld, SendHeron } from 'sendheron';
  *
  * const sendheron = new SendHeron(process.env.SENDHERON_API_KEY);
  *
@@ -26,6 +26,9 @@ export { VERSION } from './version.js';
  * if (error) throw error;                      // 4xx/5xx after retries
  * if (data.status === 'suppressed') {
  *   // refused by the compliance gate: data.errorMessage says why. Never retry.
+ * }
+ * if (isHeld(data)) {
+ *   // waiting for daily capacity or warm-up: goes out by itself. Never retry.
  * }
  * ```
  *

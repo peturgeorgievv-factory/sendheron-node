@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.7.0
+
+Additive: every field that existed keeps its shape.
+
+From 2026-10-16 the API protects its shared 24-hour sending quota and warms
+up new senders, so a send can wait instead of going out at once:
+
+- A send route's `201` can be `status: 'queued'` with a `holdReason`: a
+  held send. It is waiting, not failed, and goes out by itself on the same
+  record, which `emails.get(id)` reads back. Never retry it: a new
+  idempotency key would send it twice, and the same key replays the held
+  response. `isHeld(record)` tests for it, status `queued` with any
+  `holdReason`, including one this version does not know yet.
+- `EmailSendRecord` gains `holdReason`, `heldUntil` and
+  `warmupFirstContact`. `holdReason` is one of `SEND_HOLD_REASONS`
+  (exported with the `SendHoldReason` type): `PLATFORM_DAILY_LIMIT`,
+  `ORGANIZATION_DAILY_SHARE`, `EARNED_VOLUME`, `WARMUP_SAMPLE` or
+  `WARMUP_SAMPLE_FAILED`. `heldUntil` is when it is next tried, ISO-8601,
+  and it can be held again then. Both are null or absent on a send that is
+  not waiting. `warmupFirstContact` is always present: true when the send
+  counted in a new sender's warm-up slice, an address the organization had
+  never mailed.
+- A send with attachments cannot wait, because attachments are never
+  stored: where it would, it answers `503` with `error.code`
+  `emailSending.sendHeld`. It is retryable like a provider `503`: the SDK
+  retries it with the same idempotency key, and after that so can you, with
+  `error.idempotencyKey`.
+- `usage.get()` gains `sending`, the rolling 24-hour position on the shared
+  quota (`last24Hours`, `transactionalLast24Hours`, `share`,
+  `earnedVolume`, `marketingRemaining`, `platformMarketingHeld`, `held`)
+  and the warm-up (`warmup.status` `WARMING`, `HELD` or `COMPLETE`,
+  `completedAt`, `sampleSize`, `heldStreams`), exported as the
+  `SendingCapacityUsage`, `WarmupUsage` and `WarmupStatus` types. It can be
+  null.
+
+Earlier versions receive the same held record with the new fields untyped:
+code that treats every `201` other than `sent` as a failure would retry a
+held send and, with a new key, send it twice. Branch on
+`status === 'queued'`, or upgrade and use `isHeld`.
+
+Doc comments now also say that a templated send that was suppressed, or is
+still held, records its subject unrendered, and that a `failed` record's
+`errorMessage` carries the hold reason of a send with attachments that
+could not wait.
+
 ## 0.6.0
 
 Additive: every field that existed keeps its shape.

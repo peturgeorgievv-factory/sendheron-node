@@ -13,7 +13,8 @@
  * manual suppression is added and removed, and the only send goes to the
  * SES mailbox simulator (or is refused by the compliance gate when the
  * workspace has no sender configured, or while the organization is still
- * under sender review, which is itself a probed outcome).
+ * under sender review, or is held for daily capacity or warm-up and goes
+ * out by itself later, each of which is itself a probed outcome).
  * Run `pnpm build` first; this imports dist/.
  */
 import { exit } from 'node:process';
@@ -52,7 +53,7 @@ const record = (name, ok, detail) => {
 };
 
 // usage: shape parses whatever the plan state; the sender review is never
-// null, and every plan cap is reported
+// null, every plan cap is reported, and so is the daily sending position
 {
   const { data, error } = await sdk.usage.get();
   record(
@@ -62,9 +63,14 @@ const record = (name, ok, detail) => {
       ['SANDBOX', 'REQUESTED', 'APPROVED'].includes(data.plan.sendingReview) &&
       ['domains', 'workspaces', 'teamMembers'].every(
         (cap) => typeof data[cap]?.used === 'number',
-      ),
+      ) &&
+      (data.sending === null ||
+        (typeof data.sending.held === 'number' &&
+          ['WARMING', 'HELD', 'COMPLETE'].includes(
+            data.sending.warmup?.status,
+          ))),
     error?.code ??
-      `plan=${data?.plan.status} review=${data?.plan.sendingReview}`,
+      `plan=${data?.plan.status} review=${data?.plan.sendingReview} warmup=${data?.sending?.warmup?.status ?? 'none'}`,
   );
 }
 
@@ -124,7 +130,8 @@ let templateId;
 // a raw send resolves to an OUTCOME either way: sent (simulator sink) when
 // the workspace has a configured sender, suppressed when it does not, and
 // suppressed with SENDER_UNDER_REVIEW while the organization is unreviewed
-// (the simulator is not one of its own domains)
+// (the simulator is not one of its own domains), or queued with a
+// holdReason when it waits for daily capacity or warm-up
 let sendId;
 {
   const { data, error } = await sdk.emails.send({
@@ -137,16 +144,19 @@ let sendId;
     !error &&
     (data.status === 'sent'
       ? !!data.providerMessageId
-      : data.status === 'suppressed' && !!data.errorMessage);
+      : data.status === 'suppressed'
+        ? !!data.errorMessage
+        : data.status === 'queued' && !!data.holdReason && !!data.heldUntil);
   record(
     'send outcome',
     ok,
-    error?.code ?? `${data?.status}/${data?.errorMessage ?? ''}`,
+    error?.code ??
+      `${data?.status}/${data?.errorMessage ?? data?.holdReason ?? ''}`,
   );
 }
 
 // read the send back by id: every engagement counter is present, people
-// and machines apart
+// and machines apart, and so is the warm-up flag
 {
   const { data, error } = await sdk.emails.get(sendId);
   record(
@@ -159,7 +169,8 @@ let sendId;
         'machineOpenCount',
         'machineClickCount',
         'unconfirmedOpenCount',
-      ].every((count) => typeof data[count] === 'number'),
+      ].every((count) => typeof data[count] === 'number') &&
+      typeof data.warmupFirstContact === 'boolean',
     error?.code,
   );
 }

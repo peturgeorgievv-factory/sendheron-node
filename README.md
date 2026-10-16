@@ -41,7 +41,10 @@ const { data, error } = await sendheron.emails.send({
 
 if (error) {
   // 4xx: a request bug (error.code is a stable key). 429/5xx: the SDK
-  // already retried per its policy before handing you this.
+  // already retried per its policy before handing you this. A 503
+  // 'emailSending.sendHeld' means the send would have had to wait (daily
+  // capacity or warm-up), which a send with attachments cannot do: retry
+  // it later with error.idempotencyKey.
   throw error;
 }
 
@@ -74,6 +77,31 @@ and retrying does nothing until approval. Check
 dashboard. Sends refused before approval are not replayed afterwards: send
 them again, with a new idempotency key if you pass your own, since a reused
 key can replay the recorded refusal.
+
+A send can also wait. Mail leaves through one shared sending account with a
+rolling 24-hour quota, and new senders warm up, so a send over a daily line,
+or to an address a warming organization has never mailed, can answer
+`status: 'queued'` with the reason in `holdReason` (`SEND_HOLD_REASONS`) and
+the next attempt in `heldUntil`. That is waiting, not failing: it goes out
+by itself, on the same record, and `emails.get(id)` reads its outcome once
+it has gone. `isHeld(record)` tells you which case you have:
+
+```ts
+import { isHeld } from 'sendheron';
+
+if (isHeld(data)) {
+  // NEVER retry it: a new idempotency key would send it twice, and the
+  // same key only replays this held response.
+  console.log(`held (${data.holdReason}) until ${data.heldUntil}`);
+}
+```
+
+Attachments are never stored, so a send carrying them cannot wait: where it
+would, it answers `503` with `error.code` `emailSending.sendHeld` instead.
+That error is retryable like any provider `503`: send again later with the
+same idempotency key (`error.idempotencyKey`). `usage.get()` reports the
+daily position and the warm-up under `sending`; the lines themselves are in
+the API reference under Daily sending.
 
 ## Retries and idempotency: on by default
 
@@ -110,7 +138,8 @@ sendheron.emails.send(payload)              // raw HTML
 sendheron.emails.sendTemplate(payload)      // templated; sendAt schedules it
 sendheron.emails.sendBulk(payload)          // marketing blast to contacts
 sendheron.emails.get(id)                    // read one send back: delivery
-                                            // lifecycle, opens/clicks by people
+                                            // lifecycle, opens/clicks by people,
+                                            // a held send's outcome
 sendheron.emails.cancelScheduled(id)
 
 // Templates
@@ -128,10 +157,10 @@ sendheron.suppressions.add({ email, note })
 sendheron.suppressions.remove(email, { confirmHardTier: true })
 
 // Usage
-sendheron.usage.get() // pool position, plan caps + rate ceilings: monitor
-                      // monthlySends.transactionalRemaining,
-                      // plan.trialEndsAt / plan.lapsedReason, and
-                      // plan.sendingReview
+sendheron.usage.get() // pool position, plan caps, daily sending + rate
+                      // ceilings: monitor monthlySends.transactionalRemaining,
+                      // plan.trialEndsAt / plan.lapsedReason,
+                      // plan.sendingReview, and sending.held / sending.warmup
 ```
 
 ## Configuration

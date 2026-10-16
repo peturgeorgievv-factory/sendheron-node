@@ -22,8 +22,15 @@ type WithoutSendAt = { sendAt?: undefined };
  *                                    `data.id` and `data.providerMessageId`.
  * - `data.status === 'suppressed'` → the compliance gate refused; the reason
  *                                    is in `data.errorMessage`. Never retry.
- * - `error.statusCode === 503`     → provider failure, attempt recorded;
- *                                    safe to retry with the same key.
+ * - `isHeld(data)`                 → `queued` with a `holdReason`: waiting
+ *                                    for daily capacity or a new sender's
+ *                                    warm-up. It goes out by itself on the
+ *                                    same record (`get(data.id)`). Never
+ *                                    retry.
+ * - `error.statusCode === 503`     → provider failure, attempt recorded; or
+ *                                    `emailSending.sendHeld`, a send with
+ *                                    attachments that cannot wait. Safe to
+ *                                    retry with the same key.
  * - `error.statusCode === 429`     → rate limited; Retry-After was honored
  *                                    before the client gave up.
  *
@@ -85,6 +92,12 @@ export class Emails {
     );
   }
 
+  /**
+   * Queues one send per eligible recipient, paced per organization. A
+   * recipient can wait for daily capacity or a new sender's warm-up: its
+   * send record reads `queued` with a `holdReason` until it goes out by
+   * itself.
+   */
   sendBulk(
     payload: SendBulkPayload,
     options?: RequestOptions,
@@ -96,8 +109,9 @@ export class Emails {
    * Read one send back by the id a send response returned: including the
    * delivery lifecycle written later by provider events (deliveredAt,
    * bounced, complainedAt) and open/click counts by people, with machines
-   * and privacy proxies counted beside them. Works for recipients who are
-   * not contacts.
+   * and privacy proxies counted beside them. A held send reads `queued`
+   * with `holdReason` and `heldUntil` here until it goes, then its outcome.
+   * Works for recipients who are not contacts.
    */
   get(id: string, options?: RequestOptions): Promise<Result<EmailSendRecord>> {
     return this.client.get(
