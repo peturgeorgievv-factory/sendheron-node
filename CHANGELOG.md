@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.8.0
+
+Additive: every field that existed keeps its shape.
+
+From 2026-10-17 the API screens contact addresses and keeps a
+platform-wide list of addresses that do not exist:
+
+- A send can be suppressed with a new reason, `ADDRESS_UNDELIVERABLE`: the
+  address cannot receive email. It is on the platform-wide list of
+  addresses that hard-bounced as nonexistent, so a bounce in one
+  organization stops every organization's next send to it, or the
+  contact's screening found it undeliverable. It blocks every stream,
+  transactional included. It joins `SEND_BLOCK_REASONS` and
+  `RECIPIENT_BLOCK_REASONS`, and `isSenderSideBlock` returns false for it:
+  drop the address, never retry.
+- `suppressions.check()` gains `knownHardBounce`, always a boolean, and the
+  matching contact's screening: `screeningVerdict` (`VALID`, `RISKY`,
+  `UNDELIVERABLE` or `UNCHECKED`, null without a screened contact),
+  `screeningReasons` (never null, empty without one) and `suggestedEmail`
+  (the address with a likely typo fixed, or null). New exports:
+  `SCREENING_REASONS` with the `ScreeningReason` type, most serious first,
+  and the `ScreeningVerdict` type. Only `UNDELIVERABLE` stops mail, and
+  one that rests on DNS alone only for a day after the check.
+- The first email to each contact imported from a list whose people were
+  last mailed over a year ago goes out in checked slices of that import,
+  even once the sender's own warm-up is over. `SEND_HOLD_REASONS` gains
+  `IMPORT_SAMPLE` (the send waits for the import's next slice) and
+  `IMPORT_SAMPLE_FAILED` (a slice bounced or drew complaints past the line,
+  so the rest of the import waits until a person at SendHeron has looked
+  at it). `isHeld` already counted both, as it counts any hold reason.
+- `EmailSendRecord` gains `contactImportId`: the import whose checked slice
+  the send belongs to, or waits for. Null or absent on every other send.
+
+Earlier versions receive the new values untyped and still take the safe
+direction: `isSenderSideBlock('ADDRESS_UNDELIVERABLE')` was already false,
+since unknown reasons count as recipient-side, and `isHeld` is true for the
+import holds.
+
+The API also screens every contact it creates or upserts, a surface this
+SDK does not wrap yet: an address with valid syntax is never refused for
+screening, and an `UNDELIVERABLE` contact is created, takes no seat on the
+plan, and every send to it is suppressed with `ADDRESS_UNDELIVERABLE`.
+
 ## 0.7.0
 
 Additive: every field that existed keeps its shape.

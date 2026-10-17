@@ -156,7 +156,7 @@ let sendId;
 }
 
 // read the send back by id: every engagement counter is present, people
-// and machines apart, and so is the warm-up flag
+// and machines apart, and so are the warm-up flag and the import slice
 {
   const { data, error } = await sdk.emails.get(sendId);
   record(
@@ -170,18 +170,30 @@ let sendId;
         'machineClickCount',
         'unconfirmedOpenCount',
       ].every((count) => typeof data[count] === 'number') &&
-      typeof data.warmupFirstContact === 'boolean',
+      typeof data.warmupFirstContact === 'boolean' &&
+      (data.contactImportId === null ||
+        typeof data.contactImportId === 'string'),
     error?.code,
   );
 }
 
-// per-stream deliverability verdict
+// per-stream deliverability verdict, with the platform-wide hard-bounce
+// list and the address screening
 {
   const { data, error } = await sdk.suppressions.check(SIMULATOR_SUCCESS);
   record(
     'suppressions.check',
-    !error && typeof data.transactional.allowed === 'boolean',
-    error?.code,
+    !error &&
+      typeof data.transactional.allowed === 'boolean' &&
+      typeof data.knownHardBounce === 'boolean' &&
+      (data.screeningVerdict === null ||
+        ['VALID', 'RISKY', 'UNDELIVERABLE', 'UNCHECKED'].includes(
+          data.screeningVerdict,
+        )) &&
+      Array.isArray(data.screeningReasons) &&
+      (data.suggestedEmail === null || typeof data.suggestedEmail === 'string'),
+    error?.code ??
+      `knownHardBounce=${data?.knownHardBounce} screening=${data?.screeningVerdict ?? 'none'}`,
   );
 }
 

@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   type CountUsage,
   isHeld,
+  isSenderSideBlock,
+  type ScreeningReason,
+  type ScreeningVerdict,
   SendHeron,
   SendHeronError,
+  type SendHoldReason,
   type SendingCapacityUsage,
   type WarmupStatus,
   type WarmupUsage,
@@ -29,6 +33,24 @@ const sentRecord = {
   machineClickCount: 0,
   unconfirmedOpenCount: 0,
   warmupFirstContact: false,
+};
+
+/** The suppressions.check() answer for an address nothing refuses. */
+const deliverable = {
+  email: 'jane@example.com',
+  suppressed: false,
+  tier: null,
+  reason: null,
+  source: null,
+  suppressedAt: null,
+  note: null,
+  contactStatus: null,
+  screeningVerdict: null,
+  screeningReasons: [],
+  suggestedEmail: null,
+  knownHardBounce: false,
+  marketing: { allowed: true, blockReason: null },
+  transactional: { allowed: true, blockReason: null },
 };
 
 /** A new organization's daily position: inside every line, warming up. */
@@ -202,6 +224,95 @@ describe('send outcomes', () => {
       heldUntil: null,
       warmupFirstContact: true,
     });
+  });
+
+  it('passes an ADDRESS_UNDELIVERABLE refusal through as DATA, recipient-side', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          ...sentRecord,
+          to: 'gone@example.com',
+          status: 'suppressed',
+          errorMessage: 'ADDRESS_UNDELIVERABLE',
+          providerMessageId: undefined,
+        },
+      },
+    ]);
+
+    const { data, error } = await build().emails.send({
+      to: 'gone@example.com',
+      subject: 'Receipt',
+      html: '<p>x</p>',
+    });
+
+    expect(error).toBeNull();
+    expect(data).toMatchObject({
+      status: 'suppressed',
+      errorMessage: 'ADDRESS_UNDELIVERABLE',
+    });
+    // The address cannot receive email, transactional included: drop it.
+    expect(isSenderSideBlock(data!.errorMessage)).toBe(false);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('passes an import slice hold through as DATA, with its import', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          ...sentRecord,
+          status: 'queued',
+          providerMessageId: undefined,
+          holdReason: 'IMPORT_SAMPLE',
+          heldUntil: '2026-10-19T09:40:00.000Z',
+          contactImportId: 'import-1',
+        },
+      },
+    ]);
+
+    const { data, error } = await build().emails.sendTemplate({
+      to: 'user@example.com',
+      templateId: 't-1',
+      contactId: 'contact-1',
+    });
+
+    expect(error).toBeNull();
+    expect(isHeld(data!)).toBe(true);
+    expect(data).toMatchObject({
+      status: 'queued',
+      holdReason: 'IMPORT_SAMPLE',
+      contactImportId: 'import-1',
+      // The import's own slice, not a new sender's warm-up.
+      warmupFirstContact: false,
+    });
+    // One request: it goes out by itself with the import's next slice.
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('reads an import held past its line back as held', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          ...sentRecord,
+          status: 'queued',
+          providerMessageId: null,
+          holdReason: 'IMPORT_SAMPLE_FAILED',
+          heldUntil: '2026-10-19T10:10:00.000Z',
+          contactImportId: 'import-1',
+        },
+      },
+    ]);
+
+    const { data } = await build().emails.get('log-1');
+
+    // A slice of the import bounced or drew complaints past the line: the
+    // rest of it waits for a person at SendHeron, still never retried.
+    expect(isHeld(data!)).toBe(true);
+    const reason: SendHoldReason | null | undefined = data!.holdReason;
+    expect(reason).toBe('IMPORT_SAMPLE_FAILED');
+    expect(data!.contactImportId).toBe('import-1');
   });
 
   it('surfaces API errors as typed values, never throws', async () => {
@@ -815,6 +926,81 @@ describe('request shaping', () => {
     expect(data!.machineOpenCount).toBe(2);
     expect(data!.machineClickCount).toBe(3);
     expect(data!.unconfirmedOpenCount).toBe(1);
+  });
+
+  it('reads a platform-wide hard bounce and the contact screening on a check', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          ...deliverable,
+          email: 'gone@example.com',
+          contactStatus: 'SUBSCRIBED',
+          screeningVerdict: 'UNDELIVERABLE',
+          screeningReasons: ['KNOWN_HARD_BOUNCE'],
+          knownHardBounce: true,
+          marketing: { allowed: false, blockReason: 'ADDRESS_UNDELIVERABLE' },
+          transactional: {
+            allowed: false,
+            blockReason: 'ADDRESS_UNDELIVERABLE',
+          },
+        },
+      },
+    ]);
+
+    const { data, error } =
+      await build().suppressions.check('gone@example.com');
+
+    expect(error).toBeNull();
+    // It bounced in another organization: no suppression entry here, yet
+    // every stream refuses it.
+    expect(data!.suppressed).toBe(false);
+    expect(data!.knownHardBounce).toBe(true);
+    const verdict: ScreeningVerdict | null = data!.screeningVerdict;
+    expect(verdict).toBe('UNDELIVERABLE');
+    const reasons: ScreeningReason[] = data!.screeningReasons;
+    expect(reasons).toEqual(['KNOWN_HARD_BOUNCE']);
+    expect(data!.marketing.blockReason).toBe('ADDRESS_UNDELIVERABLE');
+    expect(data!.transactional).toEqual({
+      allowed: false,
+      blockReason: 'ADDRESS_UNDELIVERABLE',
+    });
+  });
+
+  it('reads a likely typo as mailable, with the suggested fix', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          ...deliverable,
+          email: 'jane@gmial.com',
+          contactStatus: 'SUBSCRIBED',
+          screeningVerdict: 'RISKY',
+          screeningReasons: ['LIKELY_TYPO'],
+          suggestedEmail: 'jane@gmail.com',
+        },
+      },
+    ]);
+
+    const { data } = await build().suppressions.check('jane@gmial.com');
+
+    // RISKY is a flag for a person to look at, never a refusal.
+    expect(data!.screeningVerdict).toBe('RISKY');
+    expect(data!.suggestedEmail).toBe('jane@gmail.com');
+    expect(data!.marketing.allowed).toBe(true);
+    expect(data!.transactional.allowed).toBe(true);
+  });
+
+  it('reads an address without a screened contact: no verdict, no reasons', async () => {
+    server = await startMockServer([{ status: 200, body: deliverable }]);
+
+    const { data } = await build().suppressions.check('jane@example.com');
+
+    expect(data!.screeningVerdict).toBeNull();
+    // Never null, so it iterates without a guard.
+    expect(data!.screeningReasons).toEqual([]);
+    expect(data!.suggestedEmail).toBeNull();
+    expect(data!.knownHardBounce).toBe(false);
   });
 
   it('reads usage with nullable pool fields intact', async () => {

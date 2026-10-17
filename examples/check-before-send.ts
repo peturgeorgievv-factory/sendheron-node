@@ -21,6 +21,14 @@ if (verdict) {
   console.log(
     `marketing:     ${verdict.marketing.allowed ? 'would send' : verdict.marketing.blockReason}`,
   );
+  // The matching contact's screening. Only UNDELIVERABLE stops mail.
+  const reasons = verdict.screeningReasons.join(', ');
+  console.log(
+    `screening:     ${verdict.screeningVerdict ?? 'no screened contact'}${reasons ? ` (${reasons})` : ''}`,
+  );
+  if (verdict.suggestedEmail) {
+    console.log(`did you mean:  ${verdict.suggestedEmail}`);
+  }
 }
 
 const { data: usage } = await sendheron.usage.get();
