@@ -23,8 +23,9 @@ type WithoutSendAt = { sendAt?: undefined };
  * - `data.status === 'suppressed'` → the compliance gate refused; the reason
  *                                    is in `data.errorMessage`. Never retry.
  * - `isHeld(data)`                 → `queued` with a `holdReason`: waiting
- *                                    for daily capacity or a new sender's
- *                                    warm-up. It goes out by itself on the
+ *                                    for daily capacity, a new sender's
+ *                                    warm-up or an import's checked first
+ *                                    sends. It goes out by itself on the
  *                                    same record (`get(data.id)`). Never
  *                                    retry.
  * - `error.statusCode === 503`     → provider failure, attempt recorded; or

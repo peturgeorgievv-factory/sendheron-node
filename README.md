@@ -78,6 +78,24 @@ dashboard. Sends refused before approval are not replayed afterwards: send
 them again, with a new idempotency key if you pass your own, since a reused
 key can replay the recorded refusal.
 
+`ADDRESS_UNDELIVERABLE` is recipient-side: the address cannot receive
+email. Either it is on the platform-wide list of addresses that
+hard-bounced as nonexistent, so a bounce in one organization stops every
+organization's next send to it, or the contact's screening found it
+undeliverable (not an address, no such domain, or a domain that takes no
+mail). It blocks every stream, transactional included. Drop the address
+and never retry it.
+
+`suppressions.check()` shows this before you send. `knownHardBounce` is
+true for an address on that list, and `screeningVerdict` (`VALID`,
+`RISKY`, `UNDELIVERABLE` or `UNCHECKED`), `screeningReasons`
+(`SCREENING_REASONS`, most serious first) and `suggestedEmail` (a likely
+typo, fixed) repeat the screening of the matching contact. Without a
+screened contact they read null, an empty list and null. Only
+`UNDELIVERABLE` stops mail. `RISKY` (a throwaway domain, a likely typo, a
+role or system mailbox) and `UNCHECKED` (DNS did not answer in time) stay
+mailable.
+
 A send can also wait. Mail leaves through one shared sending account with a
 rolling 24-hour quota, and new senders warm up, so a send over a daily line,
 or to an address a warming organization has never mailed, can answer
@@ -95,6 +113,15 @@ if (isHeld(data)) {
   console.log(`held (${data.holdReason}) until ${data.heldUntil}`);
 }
 ```
+
+Old lists warm up too. For contacts imported from a list whose people were
+last mailed over a year ago, the first email to each goes out in checked
+slices of that import, even once the sender's own warm-up is over
+(`IMPORT_SAMPLE`). When a slice bounces or draws complaints past the line,
+the rest of that import waits until SendHeron has looked at it
+(`IMPORT_SAMPLE_FAILED`). Those sends carry the import's id in
+`contactImportId`, and they are held sends like any other: `isHeld` is
+true, and they go out by themselves.
 
 Attachments are never stored, so a send carrying them cannot wait: where it
 would, it answers `503` with `error.code` `emailSending.sendHeld` instead.
@@ -151,7 +178,8 @@ sendheron.templates.validate(document)
 
 // Suppressions
 sendheron.suppressions.check('user@example.com') // per-stream recipient and
-                                                 // organization verdict
+                                                 // organization verdict, with
+                                                 // the address screening
 sendheron.suppressions.list({ tier: 'HARD' })
 sendheron.suppressions.add({ email, note })
 sendheron.suppressions.remove(email, { confirmHardTier: true })

@@ -5,6 +5,7 @@ import {
   isHeld,
   isSenderSideBlock,
   RECIPIENT_BLOCK_REASONS,
+  SCREENING_REASONS,
   SEND_BLOCK_REASONS,
   SEND_HOLD_REASONS,
   SENDER_SIDE_BLOCK_REASONS,
@@ -35,19 +36,48 @@ describe('block reason groupings', () => {
     // because the account was not approved yet.
     expect(isSenderSideBlock('SENDER_UNDER_REVIEW')).toBe(true);
   });
+
+  it('classifies ADDRESS_UNDELIVERABLE as recipient-side: drop the address', () => {
+    // The address cannot receive email (a platform-wide hard bounce, or
+    // the contact's screening). Nothing the sender fixes changes that.
+    expect(RECIPIENT_BLOCK_REASONS).toContain('ADDRESS_UNDELIVERABLE');
+    expect(SENDER_SIDE_BLOCK_REASONS).not.toContain('ADDRESS_UNDELIVERABLE');
+    expect(isSenderSideBlock('ADDRESS_UNDELIVERABLE')).toBe(false);
+  });
+});
+
+describe('address screening', () => {
+  it('SCREENING_REASONS lists exactly the API screening reasons, most serious first', () => {
+    // The backend's ScreeningReason enum (email-automation-service #144).
+    // A contact's screeningReasons come sorted in this order.
+    expect([...SCREENING_REASONS]).toEqual([
+      'INVALID_SYNTAX',
+      'KNOWN_HARD_BOUNCE',
+      'DOMAIN_NOT_FOUND',
+      'NO_MAIL_SERVER',
+      'DISPOSABLE_DOMAIN',
+      'LIKELY_TYPO',
+      'ROLE_ADDRESS',
+      'SYSTEM_ADDRESS',
+      'DNS_UNCHECKED',
+    ]);
+  });
 });
 
 describe('held sends', () => {
   type HoldFields = Pick<EmailSendRecord, 'status' | 'holdReason'>;
 
   it('SEND_HOLD_REASONS lists exactly the API hold reasons', () => {
-    // The backend's SendHoldReason enum (email-automation-service #143).
+    // The backend's SendHoldReason enum (email-automation-service #143,
+    // and #144 for the import slices).
     expect([...SEND_HOLD_REASONS]).toEqual([
       'PLATFORM_DAILY_LIMIT',
       'ORGANIZATION_DAILY_SHARE',
       'EARNED_VOLUME',
       'WARMUP_SAMPLE',
       'WARMUP_SAMPLE_FAILED',
+      'IMPORT_SAMPLE',
+      'IMPORT_SAMPLE_FAILED',
     ]);
   });
 

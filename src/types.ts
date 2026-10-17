@@ -13,8 +13,8 @@ export type SendStream = 'MARKETING' | 'TRANSACTIONAL';
  * Lifecycle of one send. `suppressed` is an OUTCOME, not an error: the
  * compliance gate refused the send and recorded why: never retry those.
  * `queued` with a `holdReason` is a held send (`isHeld`): it waits for daily
- * capacity or a new sender's warm-up and goes out by itself, so never retry
- * those either.
+ * capacity, a new sender's warm-up or an import's checked first sends, and
+ * goes out by itself, so never retry those either.
  * `opened` and `clicked` mean a person opened or clicked. A send that only
  * machines touched (security scanners, link checkers, a privacy proxy
  * fetching the pixel) reads `delivered`: their events still prove delivery.
@@ -37,6 +37,7 @@ export const SEND_BLOCK_REASONS = [
   'HARD_SUPPRESSED',
   'CONSENT_SUPPRESSED',
   'CONTACT_HARD_BLOCKED',
+  'ADDRESS_UNDELIVERABLE',
   'CONTACT_UNSUBSCRIBED',
   'LIST_UNSUBSCRIBED',
   'ORG_SENDING_PAUSED',
@@ -65,13 +66,18 @@ export const SENDER_SIDE_BLOCK_REASONS = [
 ] as const satisfies readonly SendBlockReason[];
 
 /**
- * Refusals that are facts about the RECIPIENT (suppression, opt-out).
- * Never retry these; surface them.
+ * Refusals that are facts about the RECIPIENT (suppression, opt-out, an
+ * address that cannot receive email). Never retry these; surface them.
+ * `ADDRESS_UNDELIVERABLE`: the address is on the platform-wide list of
+ * addresses that hard-bounced as nonexistent, or the contact's screening
+ * found it undeliverable. It blocks every stream, transactional included:
+ * drop the address.
  */
 export const RECIPIENT_BLOCK_REASONS = [
   'HARD_SUPPRESSED',
   'CONSENT_SUPPRESSED',
   'CONTACT_HARD_BLOCKED',
+  'ADDRESS_UNDELIVERABLE',
   'CONTACT_UNSUBSCRIBED',
   'LIST_UNSUBSCRIBED',
 ] as const satisfies readonly SendBlockReason[];
@@ -101,6 +107,13 @@ export const isSenderSideBlock = (reason: string | null | undefined): boolean =>
  * - `WARMUP_SAMPLE_FAILED`: a slice crossed the bounce or complaint line, so
  *   new-address mail on that stream waits until a person at SendHeron has
  *   looked at it.
+ * - `IMPORT_SAMPLE`: the first email to a contact from an import whose
+ *   people were last mailed over a year ago goes out in checked slices of
+ *   that import, and this send waits for the next one. It applies once
+ *   warm-up is over; a warming sender's slices cover those contacts.
+ * - `IMPORT_SAMPLE_FAILED`: a slice of that import bounced or drew
+ *   complaints past the line, so the rest of it waits until a person at
+ *   SendHeron has looked at it.
  */
 export const SEND_HOLD_REASONS = [
   'PLATFORM_DAILY_LIMIT',
@@ -108,6 +121,8 @@ export const SEND_HOLD_REASONS = [
   'EARNED_VOLUME',
   'WARMUP_SAMPLE',
   'WARMUP_SAMPLE_FAILED',
+  'IMPORT_SAMPLE',
+  'IMPORT_SAMPLE_FAILED',
 ] as const;
 
 export type SendHoldReason = (typeof SEND_HOLD_REASONS)[number];
@@ -165,6 +180,13 @@ export interface EmailSendRecord {
    * until it goes.
    */
   warmupFirstContact: boolean;
+  /**
+   * The import whose checked slice this send belongs to, or waits for
+   * (`IMPORT_SAMPLE`, `IMPORT_SAMPLE_FAILED`): a first send to a contact from
+   * an import whose people were last mailed over a year ago. Such a send
+   * reads `warmupFirstContact` false. Null or absent on every other send.
+   */
+  contactImportId?: string | null;
   organizationId: string;
   workspaceId: string;
   sentAt?: string | null;
@@ -198,8 +220,9 @@ export interface EmailSendRecord {
 
 /**
  * True when a send is held: status `queued` with a `holdReason`. It waits
- * for daily capacity or a new sender's warm-up and goes out by itself, on
- * the same record (`emails.get(id)` reads its outcome once it has gone).
+ * for daily capacity, a new sender's warm-up or an import's checked first
+ * sends, and goes out by itself, on the same record (`emails.get(id)`
+ * reads its outcome once it has gone).
  * Never retry it: a new idempotency key would send it twice, and the same
  * key replays the held response. Any `holdReason` counts, including one
  * this SDK version does not know yet: it is waiting all the same.
@@ -429,9 +452,61 @@ export interface ChannelDeliverability {
 }
 
 /**
+ * What address screening concluded about a contact, when it was created,
+ * imported or its address changed. Only `UNDELIVERABLE` stops mail
+ * (`ADDRESS_UNDELIVERABLE`, every stream), and one that rests on DNS alone
+ * (`DOMAIN_NOT_FOUND`, `NO_MAIL_SERVER`) only for a day after the check, as
+ * a new domain may still be setting up its mail. `RISKY` (a throwaway
+ * domain, a likely typo, a role or system mailbox) and `UNCHECKED` (DNS did
+ * not answer in time) stay mailable.
+ */
+export type ScreeningVerdict =
+  | 'VALID'
+  | 'RISKY'
+  | 'UNDELIVERABLE'
+  | 'UNCHECKED';
+
+/**
+ * One fact screening found about an address. A verdict can carry several,
+ * listed most serious first, in this order. Stable, machine-readable values.
+ *
+ * - `INVALID_SYNTAX`: not an email address.
+ * - `KNOWN_HARD_BOUNCE`: it hard-bounced as nonexistent before, in any
+ *   organization on the platform.
+ * - `DOMAIN_NOT_FOUND`: the domain does not exist.
+ * - `NO_MAIL_SERVER`: the domain accepts no mail.
+ * - `DISPOSABLE_DOMAIN`: a throwaway mailbox service.
+ * - `LIKELY_TYPO`: one slip away from a big mailbox provider;
+ *   `suggestedEmail` has the fix.
+ * - `ROLE_ADDRESS`: a mailbox for a function (`info@`, `sales@`), not a
+ *   person.
+ * - `SYSTEM_ADDRESS`: a mailbox nobody subscribes from (`abuse@`,
+ *   `postmaster@`, `noreply@`).
+ * - `DNS_UNCHECKED`: DNS did not answer in time, so the mail server is
+ *   unknown.
+ *
+ * The first four make the verdict `UNDELIVERABLE`, the next four `RISKY`,
+ * and `DNS_UNCHECKED` without any of them `UNCHECKED`.
+ */
+export const SCREENING_REASONS = [
+  'INVALID_SYNTAX',
+  'KNOWN_HARD_BOUNCE',
+  'DOMAIN_NOT_FOUND',
+  'NO_MAIL_SERVER',
+  'DISPOSABLE_DOMAIN',
+  'LIKELY_TYPO',
+  'ROLE_ADDRESS',
+  'SYSTEM_ADDRESS',
+  'DNS_UNCHECKED',
+] as const;
+
+export type ScreeningReason = (typeof SCREENING_REASONS)[number];
+
+/**
  * `suppressions.check()`: the recipient and organization verdict
- * (suppression tiers, contact status, sending pause). Sender configuration,
- * list opt-outs and an archived workspace are only evaluated on a real send.
+ * (suppression tiers, contact status, address screening, sending pause).
+ * Sender configuration, list opt-outs and an archived workspace are only
+ * evaluated on a real send.
  */
 export interface EmailDeliverability {
   email: string;
@@ -442,6 +517,19 @@ export interface EmailDeliverability {
   suppressedAt: string | null;
   note: string | null;
   contactStatus: string | null;
+  /** The matching contact's screening verdict. Null without a screened contact. */
+  screeningVerdict: ScreeningVerdict | null;
+  /** The matching contact's screening reasons. Never null: empty without one. */
+  screeningReasons: ScreeningReason[];
+  /** The address with a likely domain typo fixed (`LIKELY_TYPO`), or null. */
+  suggestedEmail: string | null;
+  /**
+   * True when the address hard-bounced as nonexistent somewhere on the
+   * platform, in any organization. It is not one of your suppression
+   * entries, so `suppressed` can be false, yet mail to it is refused on
+   * every stream, transactional included.
+   */
+  knownHardBounce: boolean;
   marketing: ChannelDeliverability;
   transactional: ChannelDeliverability;
 }
