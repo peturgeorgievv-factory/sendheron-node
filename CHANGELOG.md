@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.9.0
+
+Additive: every field that existed keeps its shape, and every call that
+worked before works the same way.
+
+From 2026-10-18 templates can carry preview text, the line inboxes show
+after the subject. Every send of the template carries it as a hidden
+preheader at the top of the body; it is never stored in `bodyHtml`.
+
+- `Template` gains `previewText` on every template response (`get`,
+  `list`, `create`, `update`): a string, or null when the template has
+  none.
+- `templates.create()` and `templates.update()` take `previewText`. It
+  supports merge tags, whitespace collapses to one line, and blank means
+  none. On update, null or an empty string removes it and leaving it out
+  keeps it. Over 200 characters, merge tags counted as written, it is a
+  400 `templates.previewTextTooLong`: refused, never truncated.
+- `templates.preview()` takes `subject` and `previewText` and returns
+  `renderedSubject` and `renderedPreviewText`, rendered with `sampleData`
+  and null when there is none. The preview text is also placed in
+  `renderedHtml` as the hidden preheader. Over 200 characters it is the
+  same 400.
+- `templates.validate(document, previewText)` checks a block document with
+  the preview text it will carry: the preheader counts toward the size
+  limit, and past 200 characters the text comes back as an issue, not a
+  400. `validate(document)` and `validate(document, options)` work as
+  before.
+
+A template without preview text sends exactly what it sent before. Adding
+preview text can push a builder document at the edge of the size limit
+over it: `create()` and `update()` then answer 400
+`templates.invalidDocument`, and `validate(document, previewText)` reports
+it first.
+
 ## 0.8.0
 
 Additive: every field that existed keeps its shape.

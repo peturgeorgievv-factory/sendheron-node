@@ -70,6 +70,30 @@ const sendingPosition = {
   },
 };
 
+/** A saved template, as every template route answers it. */
+const savedTemplate = {
+  id: 't-1',
+  name: 'Welcome',
+  subject: 'Welcome, {{contact.firstName}}',
+  previewText: 'Your first steps, and where to find help',
+  bodyHtml: '<p>Hi {{contact.firstName}}</p>',
+  document: null,
+  bodyMjml: null,
+  emailType: 'TRANSACTIONAL',
+  variables: ['contact.firstName'],
+  organizationId: 'org-1',
+  workspaceId: 'ws-1',
+  createdAt: '2026-10-18T16:00:00.000Z',
+  updatedAt: '2026-10-18T16:00:00.000Z',
+};
+
+/** A block document, for the validate route. */
+const blockDocument = {
+  version: 1,
+  settings: { contentWidth: 600, backgroundColor: '#f4f4f5' },
+  blocks: [{ id: 'b1', type: 'heading', text: 'Hello', level: 1 }],
+};
+
 let server: MockServer;
 
 afterEach(async () => {
@@ -1339,5 +1363,203 @@ describe('request shaping', () => {
     expect(sending.last24Hours).toBeNull();
     expect(sending.transactionalLast24Hours).toBeNull();
     expect(sending.marketingRemaining).toBeNull();
+  });
+});
+
+describe('templates', () => {
+  it('creates a template with preview text and reads it back', async () => {
+    server = await startMockServer([{ status: 201, body: savedTemplate }]);
+
+    const { data, error } = await build().templates.create({
+      name: 'Welcome',
+      subject: 'Welcome, {{contact.firstName}}',
+      previewText: 'Your first steps, and where to find help',
+      bodyHtml: '<p>Hi {{contact.firstName}}</p>',
+      emailType: 'TRANSACTIONAL',
+    });
+
+    expect(error).toBeNull();
+    expect(JSON.parse(server.requests[0]!.body).previewText).toBe(
+      'Your first steps, and where to find help',
+    );
+    const previewText: string | null = data!.previewText;
+    expect(previewText).toBe('Your first steps, and where to find help');
+  });
+
+  it('lists templates with their preview text, null on one without', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          data: [
+            savedTemplate,
+            { ...savedTemplate, id: 't-2', previewText: null },
+          ],
+          totalCount: 2,
+        },
+      },
+    ]);
+
+    const { data } = await build().templates.list();
+
+    expect(data!.data.map((template) => template.previewText)).toEqual([
+      'Your first steps, and where to find help',
+      null,
+    ]);
+  });
+
+  it('removes preview text with an explicit null, and keeps it when left out', async () => {
+    server = await startMockServer([
+      { status: 200, body: { ...savedTemplate, previewText: null } },
+    ]);
+    const sdk = build();
+
+    const { data } = await sdk.templates.update('t-1', { previewText: null });
+    await sdk.templates.update('t-1', { name: 'Welcome v2' });
+
+    // The null is sent: it is the instruction to remove the text.
+    expect(JSON.parse(server.requests[0]!.body)).toEqual({ previewText: null });
+    expect(data!.previewText).toBeNull();
+    // Left out, no key goes at all, so the API keeps what it has.
+    expect(JSON.parse(server.requests[1]!.body)).not.toHaveProperty(
+      'previewText',
+    );
+  });
+
+  it('surfaces an over-long preview text as a typed 400, never retried', async () => {
+    server = await startMockServer([
+      {
+        status: 400,
+        body: {
+          statusCode: 400,
+          message: 'templates.previewTextTooLong',
+          error: 'Bad Request',
+        },
+      },
+    ]);
+
+    const { data, error } = await build().templates.create({
+      name: 'Welcome',
+      subject: 's',
+      previewText: 'x'.repeat(201),
+      bodyHtml: '<p>x</p>',
+      emailType: 'TRANSACTIONAL',
+    });
+
+    // Refused, never truncated.
+    expect(data).toBeNull();
+    expect(error!.statusCode).toBe(400);
+    expect(error!.code).toBe('templates.previewTextTooLong');
+    expect(error!.retryable).toBe(false);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('previews a subject and preview text as the inbox shows them', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          renderedHtml:
+            '<div style="display:none;">Your first steps, Ada</div><p>Hi Ada</p>',
+          renderedSubject: 'Welcome, Ada',
+          renderedPreviewText: 'Your first steps, Ada',
+          injectedUnsubscribeFooter: false,
+          hasUnrecognizedUnsubscribeLink: false,
+          appendedPromoBadge: false,
+          unsubscribeVariableIgnored: false,
+        },
+      },
+    ]);
+
+    const { data, error } = await build().templates.preview({
+      bodyHtml: '<p>Hi {{contact.firstName}}</p>',
+      emailType: 'TRANSACTIONAL',
+      sampleData: { contact: { firstName: 'Ada' } },
+      subject: 'Welcome, {{contact.firstName}}',
+      previewText: 'Your first steps, {{contact.firstName}}',
+    });
+
+    expect(error).toBeNull();
+    expect(JSON.parse(server.requests[0]!.body)).toMatchObject({
+      subject: 'Welcome, {{contact.firstName}}',
+      previewText: 'Your first steps, {{contact.firstName}}',
+    });
+    const subject: string | null = data!.renderedSubject;
+    expect(subject).toBe('Welcome, Ada');
+    const previewText: string | null = data!.renderedPreviewText;
+    expect(previewText).toBe('Your first steps, Ada');
+  });
+
+  it('reads a preview without a subject or preview text as null', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          renderedHtml: '<p>Hi Ada</p>',
+          renderedSubject: null,
+          renderedPreviewText: null,
+          injectedUnsubscribeFooter: false,
+          hasUnrecognizedUnsubscribeLink: false,
+          appendedPromoBadge: false,
+          unsubscribeVariableIgnored: false,
+        },
+      },
+    ]);
+
+    const { data } = await build().templates.preview({
+      bodyHtml: '<p>Hi {{contact.firstName}}</p>',
+      sampleData: { contact: { firstName: 'Ada' } },
+    });
+
+    expect(data!.renderedSubject).toBeNull();
+    expect(data!.renderedPreviewText).toBeNull();
+  });
+
+  it('validates a document with the preview text it will carry', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          valid: false,
+          issues: ['previewText must be at most 200 characters'],
+        },
+      },
+    ]);
+
+    const { data } = await build().templates.validate(
+      blockDocument,
+      'x'.repeat(201),
+    );
+
+    expect(JSON.parse(server.requests[0]!.body)).toEqual({
+      document: blockDocument,
+      previewText: 'x'.repeat(201),
+    });
+    // A check, not a save: the over-long text is one more issue, not a 400.
+    expect(data).toEqual({
+      valid: false,
+      issues: ['previewText must be at most 200 characters'],
+    });
+  });
+
+  it('validate still reads an object second as the request options', async () => {
+    server = await startMockServer([
+      { status: 429, body: { statusCode: 429, message: 'Too many requests' } },
+    ]);
+    const sdk = build();
+
+    const { error } = await sdk.templates.validate(blockDocument, {
+      maxRetries: 0,
+    });
+    await sdk.templates.validate(blockDocument, undefined, { maxRetries: 0 });
+    await sdk.templates.validate(blockDocument, null, { maxRetries: 0 });
+
+    // maxRetries: 0 reached the client in every form: one attempt each,
+    // where the 429 would otherwise retry twice.
+    expect(error!.code).toBe('rate_limited');
+    expect(server.requests).toHaveLength(3);
+    for (const request of server.requests) {
+      expect(JSON.parse(request.body)).toEqual({ document: blockDocument });
+    }
   });
 });

@@ -1749,7 +1749,7 @@
     },
     "/api/v1/templates/preview": {
       "post": {
-        "description": "Composes raw HTML or a block document through the same path a real send uses, so the preview includes what the caller did not author: the unsubscribe block marketing mail gains, and the channel floor that can make a TRANSACTIONAL template marketing anyway. Supply exactly one of bodyHtml or document. The response also flags authoring hazards: injectedUnsubscribeFooter, hasUnrecognizedUnsubscribeLink, and unsubscribeVariableIgnored (the template references {{unsubscribe_url}} but its policy never supplies it, so a real send renders the link empty).",
+        "description": "Composes raw HTML or a block document through the same path a real send uses, so the preview includes what the caller did not author: the unsubscribe block marketing mail gains, and the channel floor that can make a TRANSACTIONAL template marketing anyway. Supply exactly one of bodyHtml or document. The response also flags authoring hazards: injectedUnsubscribeFooter, hasUnrecognizedUnsubscribeLink, and unsubscribeVariableIgnored (the template references {{unsubscribe_url}} but its policy never supplies it, so a real send renders the link empty). Pass subject and previewText to see them rendered (renderedSubject, renderedPreviewText) and the preview text placed as the hidden preheader.",
         "operationId": "TemplatesController_previewTemplate",
         "parameters": [],
         "requestBody": {
@@ -3143,6 +3143,11 @@
             "type": "object",
             "description": "The block document to check. Returns the issues that would refuse it, empty when it would save.",
             "additionalProperties": true
+          },
+          "previewText": {
+            "type": "string",
+            "description": "Preview text the template will carry. Its hidden preheader is sent in the same body, so it counts toward the size limit; past its own length limit it is reported as an issue.",
+            "maxLength": 200
           }
         },
         "required": [
@@ -3191,6 +3196,16 @@
                 "firstName": "Ada"
               }
             }
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject to render with sampleData; returned as renderedSubject.",
+            "example": "Welcome, {{contact.firstName}}"
+          },
+          "previewText": {
+            "type": "string",
+            "description": "Preview text to render with sampleData. It is placed in renderedHtml as the hidden preheader, returned as renderedPreviewText, and counted by the size check.",
+            "maxLength": 200
           }
         }
       },
@@ -3206,6 +3221,12 @@
             "type": "string",
             "description": "Email subject line",
             "example": "Welcome to {{contact.firstName}}!"
+          },
+          "previewText": {
+            "type": "string",
+            "description": "Preview text: the line inboxes show after the subject, sent as a hidden preheader at the top of the body. Supports Handlebars variables. Whitespace is collapsed to one line; blank means none. At most 200 characters (templates.previewTextTooLong).",
+            "example": "Your first steps, and where to find help",
+            "maxLength": 200
           },
           "bodyHtml": {
             "type": "string",
@@ -3285,6 +3306,12 @@
             "type": "string",
             "description": "Email subject line",
             "example": "Welcome!"
+          },
+          "previewText": {
+            "type": "string",
+            "description": "Preview text, the line inboxes show after the subject (hidden preheader). Omit to keep it; null or an empty string removes it. At most 200 characters.",
+            "maxLength": 200,
+            "nullable": true
           },
           "bodyHtml": {
             "type": "string",
