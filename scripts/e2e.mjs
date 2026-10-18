@@ -88,21 +88,47 @@ const record = (name, ok, detail) => {
   );
 }
 
-// create a TRANSACTIONAL template
+// preview text past its limit is refused, never truncated
+{
+  const { data, error } = await sdk.templates.create({
+    name: 'sdk-e2e-long-preview',
+    subject: 's',
+    previewText: 'x'.repeat(201),
+    bodyHtml: '<p>x</p>',
+    emailType: 'TRANSACTIONAL',
+  });
+  if (data?.id) {
+    // Saved after all: still leave nothing behind.
+    await sdk.templates.remove(data.id);
+  }
+  record(
+    'previewText over 200 is 400',
+    error?.code === 'templates.previewTextTooLong',
+    error?.code,
+  );
+}
+
+// create a TRANSACTIONAL template; its preview text collapses to one line
 let templateId;
 {
   const { data, error } = await sdk.templates.create({
     name: 'sdk-e2e',
     subject: 'Hello {{ name }}',
+    previewText: '  Your receipt,\n  {{ name }}  ',
     bodyHtml:
       '<p>Hi {{ name }}</p><p><a href="{{unsubscribe_url}}">Unsubscribe</a></p>',
     emailType: 'TRANSACTIONAL',
   });
   templateId = data?.id;
-  record('templates.create', !error && !!templateId, error?.code);
+  record(
+    'templates.create',
+    !error && !!templateId && data.previewText === 'Your receipt, {{ name }}',
+    error?.code ?? `previewText=${JSON.stringify(data?.previewText)}`,
+  );
 }
 
-// preview flags the ignored unsubscribe variable on transactional policy
+// preview flags the ignored unsubscribe variable on transactional policy,
+// and reads null for the subject and preview text it was not given
 {
   const { data, error } = await sdk.templates.preview({
     bodyHtml: '<p><a href="{{unsubscribe_url}}">Unsubscribe</a></p>',
@@ -110,7 +136,62 @@ let templateId;
   });
   record(
     'preview.unsubscribeVariableIgnored',
-    !error && data.unsubscribeVariableIgnored === true,
+    !error &&
+      data.unsubscribeVariableIgnored === true &&
+      data.renderedSubject === null &&
+      data.renderedPreviewText === null,
+    error?.code,
+  );
+}
+
+// preview renders the subject and preview text with sampleData, and puts
+// the preview text in the body as the hidden preheader
+{
+  const { data, error } = await sdk.templates.preview({
+    bodyHtml: '<p>Hi {{ name }}</p>',
+    emailType: 'TRANSACTIONAL',
+    sampleData: { name: 'Ada' },
+    subject: 'Hello {{ name }}',
+    previewText: 'Your receipt, {{ name }}',
+  });
+  record(
+    'preview renders subject and previewText',
+    !error &&
+      data.renderedSubject === 'Hello Ada' &&
+      data.renderedPreviewText === 'Your receipt, Ada' &&
+      data.renderedHtml.includes('Your receipt, Ada'),
+    error?.code ??
+      `subject=${data?.renderedSubject} previewText=${data?.renderedPreviewText}`,
+  );
+}
+
+// validate reports an over-long preview text as an issue, not a 400
+{
+  const { data, error } = await sdk.templates.validate(
+    {
+      version: 1,
+      settings: { contentWidth: 600, backgroundColor: '#f4f4f5' },
+      blocks: [{ id: 'b1', type: 'heading', text: 'Hello', level: 1 }],
+    },
+    'x'.repeat(201),
+  );
+  record(
+    'validate previewText issue',
+    !error &&
+      data.valid === false &&
+      data.issues.some((issue) => issue.startsWith('previewText')),
+    error?.code ?? data?.issues.join('; '),
+  );
+}
+
+// an explicit null removes the preview text
+{
+  const { data, error } = await sdk.templates.update(templateId, {
+    previewText: null,
+  });
+  record(
+    'update previewText null',
+    !error && data.previewText === null,
     error?.code,
   );
 }

@@ -371,6 +371,13 @@ export interface Template {
   id: string;
   name: string;
   subject: string;
+  /**
+   * Preview text: the line inboxes show after the subject. Every send of
+   * the template carries it as a hidden preheader at the top of the body.
+   * Null when the template has none. Never part of `bodyHtml`: it is added
+   * when a message is rendered.
+   */
+  previewText: string | null;
   bodyHtml: string;
   document?: Record<string, unknown> | null;
   bodyMjml?: string | null;
@@ -385,6 +392,14 @@ export interface Template {
 export interface CreateTemplatePayload {
   name: string;
   subject: string;
+  /**
+   * Preview text: the line inboxes show after the subject, sent as a hidden
+   * preheader at the top of the body. Supports Handlebars variables.
+   * Whitespace is collapsed to one line; blank means none. At most 200
+   * characters after that, merge tags counted as written: longer is a 400
+   * `templates.previewTextTooLong`, never truncated.
+   */
+  previewText?: string;
   /** Exactly one of bodyHtml / document. */
   bodyHtml?: string;
   document?: Record<string, unknown>;
@@ -397,6 +412,12 @@ export interface CreateTemplatePayload {
 export interface UpdateTemplatePayload {
   name?: string;
   subject?: string;
+  /**
+   * Preview text, the line inboxes show after the subject (hidden
+   * preheader). Omit to keep it; null or an empty string removes it. At
+   * most 200 characters (400 `templates.previewTextTooLong`).
+   */
+  previewText?: string | null;
   bodyHtml?: string;
   /** Object: recompile from blocks. Explicit null: eject to raw HTML. */
   document?: Record<string, unknown> | null;
@@ -419,11 +440,27 @@ export interface PreviewTemplatePayload {
    */
   channel?: string;
   sampleData?: Record<string, unknown>;
+  /** Subject to render with sampleData; returned as `renderedSubject`. */
+  subject?: string;
+  /**
+   * Preview text to render with sampleData. It is placed in `renderedHtml`
+   * as the hidden preheader, returned as `renderedPreviewText`, and counted
+   * by the size check. At most 200 characters, like a saved template's
+   * (400 `templates.previewTextTooLong`).
+   */
+  previewText?: string;
 }
 
 export interface TemplatePreview {
   /** Composed exactly as a real send composes it. */
   renderedHtml: string;
+  /** The subject as the recipient gets it; null when no subject was given. */
+  renderedSubject: string | null;
+  /**
+   * The preview text as the inbox shows it, merge tags rendered; null when
+   * there is none. Also in `renderedHtml`, as the hidden preheader.
+   */
+  renderedPreviewText: string | null;
   injectedUnsubscribeFooter: boolean;
   hasUnrecognizedUnsubscribeLink: boolean;
   appendedPromoBadge: boolean;

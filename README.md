@@ -171,10 +171,11 @@ sendheron.emails.cancelScheduled(id)
 
 // Templates
 sendheron.templates.list({ emailType: 'TRANSACTIONAL' })
-sendheron.templates.create({ ..., emailType: 'TRANSACTIONAL' }) // type is required
+sendheron.templates.create({ ..., previewText, emailType: 'TRANSACTIONAL' }) // type is required
 sendheron.templates.update(id, { emailType: 'MARKETING', confirmEmailTypeChange: true })
-sendheron.templates.preview({ bodyHtml, emailType, sampleData })
-sendheron.templates.validate(document)
+sendheron.templates.update(id, { previewText: null })  // null removes it
+sendheron.templates.preview({ bodyHtml, subject, previewText, emailType, sampleData })
+sendheron.templates.validate(document, previewText)    // previewText is optional
 
 // Suppressions
 sendheron.suppressions.check('user@example.com') // per-stream recipient and
@@ -190,6 +191,17 @@ sendheron.usage.get() // pool position, plan caps, daily sending + rate
                       // plan.trialEndsAt / plan.lapsedReason,
                       // plan.sendingReview, and sending.held / sending.warmup
 ```
+
+A template's `previewText` is the line inboxes show after the subject.
+Every send of the template carries it as a hidden preheader at the top of
+the body; it is never stored in `bodyHtml`, and template responses read it
+as a string or null. It takes merge tags, whitespace collapses to one line,
+and it is at most 200 characters, merge tags counted as written: longer is
+a 400 `templates.previewTextTooLong`, never truncated. `preview()` renders
+it with your `sampleData` into `renderedPreviewText`, beside
+`renderedSubject`, and `validate(document, previewText)` counts its
+preheader toward the size limit, so a builder document at the edge of that
+limit can be refused once preview text is added.
 
 ## Configuration
 
