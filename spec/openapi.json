@@ -704,6 +704,50 @@
         "tags": [
           "Sequences"
         ]
+      },
+      "post": {
+        "description": "Creates an empty sequence in DRAFT. Give it steps and edges with PUT /sequences/{id}/graph, then switch it on with PATCH /sequences/{id}/status; until then it enrols nobody and sends nothing. The trigger is optional here because the graph carries it too: a TRIGGER step with a configured trigger written through the graph route updates the sequence to match, and activation refuses a sequence whose trigger is incomplete.",
+        "operationId": "SequencesController_createSequence",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSequenceRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new sequence, in DRAFT"
+          },
+          "400": {
+            "description": "Validation error, or a trigger config carrying a key its type does not read"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "409": {
+            "description": "A sequence with this name already exists in the workspace"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a sequence",
+        "tags": [
+          "Sequences"
+        ]
       }
     },
     "/api/v1/sequences/{id}/enrollments": {
@@ -1135,6 +1179,98 @@
         "tags": [
           "Sequences"
         ]
+      },
+      "patch": {
+        "description": "Only DRAFT and PAUSED sequences can be edited; an ACTIVE one is refused with 400 sequences.cannotUpdateActiveSequence, so pause it first. The trigger set here is what auto-enrolment reads once the sequence is active. It does not rewrite the TRIGGER step of the graph, which is what the builder shows, so after changing it here write the graph as well, or set the trigger through PUT /sequences/{id}/graph in the first place.",
+        "operationId": "SequencesController_updateSequence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSequenceRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated sequence"
+          },
+          "400": {
+            "description": "Validation error, an active sequence, or a trigger config carrying a key its type does not read"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "Sequence not found"
+          },
+          "409": {
+            "description": "A sequence with this name already exists in the workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rename a sequence or change its trigger",
+        "tags": [
+          "Sequences"
+        ]
+      },
+      "delete": {
+        "description": "Permanent. Its steps, edges and every enrollment go with it, finished ones and their history included; the rows of mail it sent stay. An ACTIVE sequence is deleted too, which ends every contact mid-run without a record, so pause it and read GET /sequences/{id}/enrollments first if that matters.",
+        "operationId": "SequencesController_deleteSequence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Sequence UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequence deleted"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "Sequence not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a sequence",
+        "tags": [
+          "Sequences"
+        ]
       }
     },
     "/api/v1/emails/send": {
@@ -1478,6 +1614,538 @@
         "summary": "Create a new tag",
         "tags": [
           "Tags"
+        ]
+      }
+    },
+    "/api/v1/tags/{id}": {
+      "get": {
+        "operationId": "TagsController_getTag",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Tag UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tag details"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Tag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single tag by ID",
+        "tags": [
+          "Tags"
+        ]
+      },
+      "patch": {
+        "description": "Contacts and templates carrying the tag keep it under its new name, and a sequence triggered by it keeps firing: the tag is referenced by id everywhere, so nothing is re-evaluated. Segment rules on `tags` match by name, so a renamed tag drops out of a segment that names the old one.",
+        "operationId": "TagsController_updateTag",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Tag UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated tag"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Tag not found"
+          },
+          "409": {
+            "description": "Another tag in the workspace already has this name"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rename or recolor a tag",
+        "tags": [
+          "Tags"
+        ]
+      },
+      "delete": {
+        "description": "Removes the tag from every contact and template that carries it; the contacts stay. Sequence steps and triggers that referenced the tag are not edited, so a tag_added trigger for it never fires again, and re-activating a paused sequence that names it is refused until the reference is repaired.",
+        "operationId": "TagsController_deleteTag",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Tag UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tag deleted"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "Tag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a tag",
+        "tags": [
+          "Tags"
+        ]
+      }
+    },
+    "/api/v1/lists": {
+      "get": {
+        "description": "Member counts are not included here; read one list for its count.",
+        "operationId": "ListsController_listLists",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search by list name (ILIKE)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by list type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "static",
+                "dynamic"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of lists"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List lists and segments with pagination and filtering",
+        "tags": [
+          "Lists"
+        ]
+      },
+      "post": {
+        "description": "A static list starts empty: add members with POST /lists/{id}/contacts. A dynamic list is its rules, validated here with the same checks the dashboard applies, and refused rather than stored when a rule names a field or operator the segment query cannot apply.",
+        "operationId": "ListsController_createList",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateListRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new list"
+          },
+          "400": {
+            "description": "Validation error, a dynamic list without rules, or a rule the segment query cannot apply"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "409": {
+            "description": "A list with this name already exists in the workspace"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a list or a segment",
+        "tags": [
+          "Lists"
+        ]
+      }
+    },
+    "/api/v1/lists/{id}": {
+      "get": {
+        "description": "contactCount is counted at read time: the members of a static list, or the contacts a dynamic list matches right now.",
+        "operationId": "ListsController_getList",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "List UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List details plus contactCount"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "List not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single list by ID, with its member count",
+        "tags": [
+          "Lists"
+        ]
+      },
+      "patch": {
+        "operationId": "ListsController_updateList",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "List UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateListRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated list"
+          },
+          "400": {
+            "description": "Validation error, a switch to dynamic without rules, or a rule the segment query cannot apply"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "List not found"
+          },
+          "409": {
+            "description": "A list with this name already exists in the workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rename a list, describe it, or change its rules or type",
+        "tags": [
+          "Lists"
+        ]
+      },
+      "delete": {
+        "description": "Removes the list and its memberships; the contacts stay. A sequence whose list_added trigger names the list is not edited and never fires again, and a bulk send that names the list is refused.",
+        "operationId": "ListsController_deleteList",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "List UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List deleted"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "List not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a list",
+        "tags": [
+          "Lists"
+        ]
+      }
+    },
+    "/api/v1/lists/{id}/contacts": {
+      "get": {
+        "description": "The members of a static list, or the contacts a dynamic list matches right now, newest first.",
+        "operationId": "ListsController_listMembers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "List UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (0-based)",
+            "schema": {
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search members by email, first name or last name (ILIKE)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of contacts"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "404": {
+            "description": "List not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the contacts in a list",
+        "tags": [
+          "Lists"
+        ]
+      },
+      "post": {
+        "description": "Idempotent: a contact already on the list is left alone. Each newly added contact enters every ACTIVE sequence whose list_added trigger names this list, so this route is where a list-driven automation starts. A dynamic list is refused (400 lists.cannotModifyDynamicList); change its rules instead.",
+        "operationId": "ListsController_addMembers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "List UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddListMembersRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The list and its member count after the write"
+          },
+          "400": {
+            "description": "Validation error or a dynamic list"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes, or a contact id that is not in this workspace"
+          },
+          "404": {
+            "description": "List not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add contacts to a static list",
+        "tags": [
+          "Lists"
+        ]
+      },
+      "delete": {
+        "description": "A contact that is not on the list is ignored. Removing a contact does not touch any enrollment the list started; cancel those through the sequence routes if that is what you mean. A dynamic list is refused (400 lists.cannotModifyDynamicList).",
+        "operationId": "ListsController_removeMembers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "List UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveListMembersRestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The list and its member count after the write"
+          },
+          "400": {
+            "description": "Validation error or a dynamic list"
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key"
+          },
+          "403": {
+            "description": "Insufficient API key scopes"
+          },
+          "404": {
+            "description": "List not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove contacts from a static list",
+        "tags": [
+          "Lists"
         ]
       }
     },
@@ -2723,6 +3391,39 @@
           "name"
         ]
       },
+      "CreateSequenceRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Sequence name, unique within the workspace.",
+            "example": "Onboarding"
+          },
+          "triggerType": {
+            "type": "string",
+            "description": "What enrols contacts on its own once the sequence is active: manual | contact_created | list_added | tag_added | event | webhook. manual means only explicit enrollments (POST /contacts/{id}/sequences/{seqId}/enroll, the bulk route, or the dashboard). Optional on a draft: the graph's TRIGGER step carries the same information, and a graph write whose TRIGGER step is configured updates this to match, so the usual path is to leave it out here and set it in PUT /sequences/{id}/graph.",
+            "enum": [
+              "manual",
+              "contact_created",
+              "list_added",
+              "tag_added",
+              "event",
+              "webhook"
+            ]
+          },
+          "triggerConfig": {
+            "type": "object",
+            "description": "Keys depend on triggerType, and a key the trigger does not read is refused rather than stored: tagId (UUID of a tag in this workspace) for tag_added, listId (UUID) for list_added, eventName for event, an optional source filter for contact_created. Whether the trigger is complete is checked at activation, so a draft may omit them.",
+            "additionalProperties": true,
+            "example": {
+              "tagId": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "GraphStepRestDto": {
         "type": "object",
         "properties": {
@@ -2876,6 +3577,32 @@
         "required": [
           "contactIds"
         ]
+      },
+      "UpdateSequenceRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New name, unique within the workspace."
+          },
+          "triggerType": {
+            "type": "string",
+            "description": "What enrols contacts on its own once the sequence is active: manual | contact_created | list_added | tag_added | event | webhook. manual means only explicit enrollments (POST /contacts/{id}/sequences/{seqId}/enroll, the bulk route, or the dashboard). Optional on a draft: the graph's TRIGGER step carries the same information, and a graph write whose TRIGGER step is configured updates this to match, so the usual path is to leave it out here and set it in PUT /sequences/{id}/graph.",
+            "enum": [
+              "manual",
+              "contact_created",
+              "list_added",
+              "tag_added",
+              "event",
+              "webhook"
+            ]
+          },
+          "triggerConfig": {
+            "type": "object",
+            "description": "Keys depend on triggerType, and a key the trigger does not read is refused rather than stored: tagId (UUID of a tag in this workspace) for tag_added, listId (UUID) for list_added, eventName for event, an optional source filter for contact_created. Whether the trigger is complete is checked at activation, so a draft may omit them.",
+            "additionalProperties": true
+          }
+        }
       },
       "EmailAttachmentRestDto": {
         "type": "object",
@@ -3134,6 +3861,164 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "UpdateTagRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New tag name (must stay unique per workspace)"
+          },
+          "color": {
+            "type": "string",
+            "description": "Tag color (hex or name)"
+          }
+        }
+      },
+      "CreateListRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "List name, unique within the workspace.",
+            "example": "Customers"
+          },
+          "description": {
+            "type": "string",
+            "description": "What the list is for. Shown in the dashboard only."
+          },
+          "type": {
+            "type": "string",
+            "description": "static: members are added and removed explicitly, and adding one fires the list_added sequence trigger. dynamic: a segment whose members are whoever matches `rules` when it is read; nothing is ever added to it, so list_added never fires for it.",
+            "enum": [
+              "static",
+              "dynamic"
+            ]
+          },
+          "rules": {
+            "type": "object",
+            "description": "Who a dynamic list contains, evaluated every time it is read. Required when `type` is dynamic, cleared when it is static.\nA group is {\"type\": \"group\", \"logic\": and | or, \"rules\": [...]} whose rules are atomic rules {\"type\": \"rule\", \"field\": ..., \"operator\": ..., \"value\": ...} or nested groups, at most three levels deep. A bare array of atomic rules is read as an AND group.\n`field` is a contact column (email | firstName | lastName | status | source | createdAt | updatedAt), `tags`, or `properties.<key>` for a custom property; any other field is refused (400 lists.invalidRuleField). `operator` is one of equals | not_equals | contains | not_contains | starts_with | ends_with | greater_than | less_than | greater_than_or_equal | less_than_or_equal | is_set | is_not_set | in | not_in. contains, not_contains, starts_with and ends_with are case-insensitive; a contact column compares as its own type and a custom property as text. is_set and is_not_set take no value; in and not_in take an array. On `tags` only in and not_in (tag names) and is_set and is_not_set (any tag at all) are accepted.",
+            "additionalProperties": true,
+            "example": {
+              "type": "group",
+              "logic": "and",
+              "rules": [
+                {
+                  "type": "rule",
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "subscribed"
+                },
+                {
+                  "type": "rule",
+                  "field": "tags",
+                  "operator": "in",
+                  "value": [
+                    "customer"
+                  ]
+                },
+                {
+                  "type": "rule",
+                  "field": "properties.plan",
+                  "operator": "equals",
+                  "value": "pro"
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      },
+      "UpdateListRestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New name, unique within the workspace."
+          },
+          "description": {
+            "type": "string",
+            "description": "What the list is for. Shown in the dashboard only."
+          },
+          "type": {
+            "type": "string",
+            "description": "static: members are added and removed explicitly, and adding one fires the list_added sequence trigger. dynamic: a segment whose members are whoever matches `rules` when it is read; nothing is ever added to it, so list_added never fires for it. Switching a dynamic list to static drops its rules and starts it empty; switching a static list to dynamic needs `rules` in the same request.",
+            "enum": [
+              "static",
+              "dynamic"
+            ]
+          },
+          "rules": {
+            "type": "object",
+            "description": "Replaces the rules of a dynamic list. Who a dynamic list contains, evaluated every time it is read. Required when `type` is dynamic, cleared when it is static.\nA group is {\"type\": \"group\", \"logic\": and | or, \"rules\": [...]} whose rules are atomic rules {\"type\": \"rule\", \"field\": ..., \"operator\": ..., \"value\": ...} or nested groups, at most three levels deep. A bare array of atomic rules is read as an AND group.\n`field` is a contact column (email | firstName | lastName | status | source | createdAt | updatedAt), `tags`, or `properties.<key>` for a custom property; any other field is refused (400 lists.invalidRuleField). `operator` is one of equals | not_equals | contains | not_contains | starts_with | ends_with | greater_than | less_than | greater_than_or_equal | less_than_or_equal | is_set | is_not_set | in | not_in. contains, not_contains, starts_with and ends_with are case-insensitive; a contact column compares as its own type and a custom property as text. is_set and is_not_set take no value; in and not_in take an array. On `tags` only in and not_in (tag names) and is_set and is_not_set (any tag at all) are accepted.",
+            "additionalProperties": true,
+            "example": {
+              "type": "group",
+              "logic": "and",
+              "rules": [
+                {
+                  "type": "rule",
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "subscribed"
+                },
+                {
+                  "type": "rule",
+                  "field": "tags",
+                  "operator": "in",
+                  "value": [
+                    "customer"
+                  ]
+                },
+                {
+                  "type": "rule",
+                  "field": "properties.plan",
+                  "operator": "equals",
+                  "value": "pro"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "AddListMembersRestDto": {
+        "type": "object",
+        "properties": {
+          "contactIds": {
+            "description": "Contact UUIDs, every one from this workspace. One that is not, or does not exist, refuses the whole request (403 workspaces.crossWorkspaceReference) rather than being skipped.",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "contactIds"
+        ]
+      },
+      "RemoveListMembersRestDto": {
+        "type": "object",
+        "properties": {
+          "contactIds": {
+            "description": "Contact UUIDs to take off the list. One that is not on it, or not in this workspace, is ignored.",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "contactIds"
         ]
       },
       "ValidateTemplateDocumentRestDto": {
