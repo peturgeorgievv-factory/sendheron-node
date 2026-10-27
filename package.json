@@ -1,6 +1,6 @@
 {
   "name": "sendheron",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "TypeScript SDK for the SendHeron email API: typed send outcomes, automatic retries, and idempotency by default.",
   "keywords": [
     "sendheron",

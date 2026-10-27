@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.10.0
+
+Nothing in the SDK changed: every type and every call is what 0.9.0
+shipped, so upgrading needs no code change.
+
+On 2026-10-27 the API gained 14 routes, all additive and all on resources
+this SDK does not wrap yet, and `spec/openapi.json` now includes them:
+
+- Lists, a new resource for static lists and dynamic segments: `GET` and
+  `POST /api/v1/lists`, `GET`, `PATCH` and `DELETE /api/v1/lists/{id}`, and
+  `GET`, `POST` and `DELETE /api/v1/lists/{id}/contacts`.
+- Tags by id: `GET`, `PATCH` and `DELETE /api/v1/tags/{id}`.
+- The sequence lifecycle: `POST /api/v1/sequences` creates a sequence in
+  `DRAFT`, `PATCH /api/v1/sequences/{id}` renames a draft or paused one or
+  changes its trigger, and `DELETE /api/v1/sequences/{id}` deletes one.
+
+No existing operation changed, and no suppression or hold reason was added.
+Until the SDK wraps these resources, each is one documented HTTP call away.
+
 ## 0.9.0
 
 Additive: every field that existed keeps its shape, and every call that
