@@ -1,4 +1,10 @@
 /**
+ * The 409 the API answers while another request with the same idempotency
+ * key is still being processed.
+ */
+export const IN_PROGRESS_CODE = 'idempotency.requestInProgress';
+
+/**
  * One API failure, as a value.
  *
  * The client never throws on API responses: every call resolves to
@@ -17,7 +23,12 @@ export class SendHeronError extends Error {
   readonly code: string;
   /** Human-oriented detail when the API provided one. */
   readonly description?: string;
-  /** Seconds until the rate-limit window resets, from Retry-After. */
+  /**
+   * Seconds to wait before trying again, from Retry-After. On a 429, until
+   * the rate-limit window resets. On a 503, until the provider may take the
+   * send again, or until a hold lifts (`emailSending.sendHeld`), which can
+   * be hours.
+   */
   readonly retryAfterSeconds?: number;
   /**
    * The idempotency key the failed request carried (including an
@@ -28,13 +39,20 @@ export class SendHeronError extends Error {
 
   /**
    * Whether retrying the SAME request (same idempotency key) later is
-   * sensible: rate limits, 5xx, timeouts and network failures are; 4xx
-   * request bugs and caller aborts are not. Job runners should
-   * fail-permanently when this is false instead of burning attempts.
+   * sensible. Rate limits, 5xx, timeouts, network failures and a 409
+   * `idempotency.requestInProgress` (the request with this key is still
+   * running, and its outcome is not known yet) are. Other 4xx request bugs,
+   * a 422 `emailSending.providerRejected` (the provider refused the message
+   * itself) and caller aborts are not. Job runners should fail permanently
+   * when this is false instead of burning attempts. When it is true, retry
+   * with `idempotencyKey`, after `retryAfterSeconds` if that is set.
    */
   get retryable(): boolean {
     if (this.code === 'aborted') {
       return false;
+    }
+    if (this.statusCode === 409) {
+      return this.code === IN_PROGRESS_CODE;
     }
     return (
       this.statusCode === null ||

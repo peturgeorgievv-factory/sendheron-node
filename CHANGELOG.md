@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.12.0
+
+Every field that existed keeps its shape. Two behaviors change, both to
+follow the API: a `503` now waits as long as its `Retry-After` says, and
+`error.retryable` is true for a `409` `idempotency.requestInProgress`.
+
+From 2026-11-06 the send routes (`emails.send()` and
+`emails.sendTemplate()`) tell a refusal that can never succeed apart from
+one that may pass:
+
+- A message the provider refused for good (SES `MessageRejected`, an
+  unverified MAIL FROM domain, any other refusal of the message itself) is
+  a `422` `emailSending.providerRejected`, with the provider's error name in
+  `error.description`. It was a `503` `emailSending.sendFailed`, which the
+  SDK retried and a job runner following `error.retryable` retried forever.
+  `retryable` is false and the SDK never retries it: sending it again fails
+  the same way. The failed attempt is still recorded.
+- The API's send `503`s carry `Retry-After`: 30 seconds when the provider
+  is throttling or failing, 300 when the sending account cannot send, and
+  for `emailSending.sendHeld` the time until the hold lifts, which can be
+  hours. The SDK now honors it as it does on a `429`. A wait of 30 seconds
+  or less is slept, then retried with the same idempotency key. A longer
+  one comes back at once with `error.retryAfterSeconds`, for a queue to
+  reschedule. A `503` without the header still backs off exponentially.
+  Before, every keyed `503` was retried within about a second, even a hold
+  with hours to run.
+- `error.retryable` is now true for a `409` `idempotency.requestInProgress`.
+  The SDK already retried it, but when the request with that key was still
+  running after the retries ran out (a client timeout during a slow send,
+  for instance), it reported false. A job runner following it then
+  dead-lettered a send whose outcome was unknown, often one that had gone
+  out. Retry later with `error.idempotencyKey`: you get the original's
+  response once it has finished. Since 2026-11-06 a key still in progress
+  10 minutes after it was claimed is taken over by the next retry, instead
+  of answering `409` until it expires.
+- The send record gains `droppedRecipients`: the cc and bcc addresses the
+  compliance gate refused, each `{ email, reason }` with a
+  `SendBlockReason`. The message went to everyone else without them. It is
+  null or absent when none was dropped; a held send's copies are checked
+  when it goes out. New export: the `DroppedRecipient` type.
+- New `400`s, refused before anything is recorded, where the provider used
+  to refuse them as a `503` after the attempt was: more than 50 recipients
+  in total, `to` included (`emailSending.tooManyRecipients`, also when
+  scheduling), and custom headers SES would refuse: a value outside
+  printable ASCII (`emailSending.invalidHeaderValue`), a name over 126
+  characters (`emailSending.invalidHeaderName`), and a value over 995
+  characters or a name and value over 996 together
+  (`emailSending.headerValueTooLong`).
+- A send with no display name, neither `fromName` nor one on the sender
+  identity, now goes out from the bare address instead of under a
+  SendHeron default name. A name in any script is encoded for the header.
+
+The README gains an Errors table: each send error, what it means, and
+whether it is `retryable`. `spec/openapi.json` now includes the `422`, the
+`400` and the new descriptions. No suppression or hold reason was added.
+
 ## 0.11.0
 
 Additive: every field that existed keeps its shape, and every call that

@@ -128,6 +128,18 @@ export const SEND_HOLD_REASONS = [
 export type SendHoldReason = (typeof SEND_HOLD_REASONS)[number];
 
 /**
+ * A copy recipient (cc or bcc) the compliance gate refused, listed in a send
+ * record's `droppedRecipients`. A recipient-side `reason` is a fact about
+ * that address. A sender-side one (`isSenderSideBlock`), such as
+ * `SENDER_UNDER_REVIEW` for an address outside a sandboxed organization's
+ * own, is your setup.
+ */
+export interface DroppedRecipient {
+  email: string;
+  reason: SendBlockReason;
+}
+
+/**
  * The send record every send route returns and `emails.get()` reads back.
  *
  * Opens and clicks count people: `openCount`, `clickCount`, the first and
@@ -162,6 +174,12 @@ export interface EmailSendRecord {
    * records the SendHoldReason here.
    */
   errorMessage?: string | null;
+  /**
+   * Copy recipients (cc and bcc) the compliance gate refused: the message
+   * went to everyone else without them. Null or absent when none was
+   * dropped. A held send's copies are checked when it goes out.
+   */
+  droppedRecipients?: DroppedRecipient[] | null;
   /**
    * Why the send is waiting (status `queued`): see SEND_HOLD_REASONS and
    * `isHeld`. It is tried again at `heldUntil`, goes out by itself on this
@@ -301,12 +319,30 @@ export interface SendEmailPayload {
    * configured, the send is suppressed with `SENDER_NOT_CONFIGURED`.
    */
   from?: string;
-  /** Display-name override. Max 100 chars; no CR/LF or angle brackets. */
+  /**
+   * Display-name override. Max 100 chars; no CR/LF or angle brackets. Any
+   * script works: it is encoded for the header. Without one, the sender
+   * identity's name; without that, the bare address.
+   */
   fromName?: string;
   replyTo?: string;
-  /** Max 50. Each copy is suppression-checked; blocked copies are dropped. */
+  /**
+   * At most 50 recipients per message in total, `to` included: more is a
+   * 400 `emailSending.tooManyRecipients`. Each copy is suppression-checked;
+   * a refused one is dropped, the message goes without it, and the send
+   * record lists it in `droppedRecipients`.
+   */
   cc?: string[];
+  /** Counts toward the same 50, and is checked and dropped like `cc`. */
   bcc?: string[];
+  /**
+   * Custom headers, printable ASCII only: a name of at most 126 characters
+   * and a value of at most 995, both together at most 996. Anything else is
+   * a 400 (`emailSending.invalidHeaderName`, `invalidHeaderValue`,
+   * `headerValueTooLong`), and so is a header the platform owns
+   * (List-Unsubscribe, authentication, envelope:
+   * `emailSending.protectedHeader`).
+   */
   headers?: Record<string, string>;
   /** Schedule for later. Not combinable with attachments. */
   sendAt?: Date | string;
@@ -332,8 +368,17 @@ export interface SendTemplatePayload {
    * configured, the send is suppressed with `SENDER_NOT_CONFIGURED`.
    */
   from?: string;
+  /**
+   * Display-name override, as on `SendEmailPayload`: without one, the
+   * sender identity's name; without that, the bare address.
+   */
   fromName?: string;
   replyTo?: string;
+  /**
+   * At most 50 recipients per message in total, `to` included (a 400
+   * `emailSending.tooManyRecipients`, also when scheduling). Refused copies
+   * are dropped and listed in the send record's `droppedRecipients`.
+   */
   cc?: string[];
   bcc?: string[];
   /** Schedule for later; rendering and every gate run at fire time. */

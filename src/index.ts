@@ -34,8 +34,8 @@ export { VERSION } from './version.js';
  * ```
  *
  * Defaults that differ from most SDKs, on purpose:
- * - retries are ON (2), honoring Retry-After on 429 and backing off on
- *   5xx/network failures;
+ * - retries are ON (2), honoring Retry-After on 429 and 503 and backing off
+ *   on other 5xx/network failures;
  * - email sends get an idempotency key automatically, reused across internal
  *   retries: a timeout can never double-send;
  * - API failures are returned as `{ data: null, error }`, never thrown.

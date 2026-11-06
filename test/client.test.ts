@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type CountUsage,
+  type DroppedRecipient,
   type FormSignupAccepted,
   isHeld,
   isSenderSideBlock,
   type ScreeningReason,
   type ScreeningVerdict,
+  type SendBlockReason,
   SendHeron,
   SendHeronError,
   type SendHoldReason,
@@ -149,6 +151,46 @@ describe('send outcomes', () => {
       status: 'sent',
       providerMessageId: 'ses-123',
     });
+  });
+
+  it('names the copies the gate dropped, and reads null back when none was', async () => {
+    server = await startMockServer([
+      {
+        status: 201,
+        body: {
+          ...sentRecord,
+          droppedRecipients: [
+            { email: 'old@example.com', reason: 'HARD_SUPPRESSED' },
+            { email: 'outsider@example.org', reason: 'SENDER_UNDER_REVIEW' },
+          ],
+        },
+      },
+      { status: 200, body: { ...sentRecord, droppedRecipients: null } },
+    ]);
+    const sdk = build();
+
+    const { data, error } = await sdk.emails.send({
+      to: 'user@example.com',
+      subject: 'Receipt',
+      html: '<p>x</p>',
+      cc: ['old@example.com', 'accounts@example.com'],
+      bcc: ['outsider@example.org'],
+    });
+
+    expect(error).toBeNull();
+    // The message still went, to everyone else.
+    expect(data!.status).toBe('sent');
+    const dropped: DroppedRecipient[] = data!.droppedRecipients!;
+    const reasons: SendBlockReason[] = dropped.map((copy) => copy.reason);
+    expect(dropped.map((copy) => copy.email)).toEqual([
+      'old@example.com',
+      'outsider@example.org',
+    ]);
+    // A fact about that address, versus the organization's own setup.
+    expect(reasons.map(isSenderSideBlock)).toEqual([false, true]);
+
+    const { data: none } = await sdk.emails.get('log-1');
+    expect(none!.droppedRecipients).toBeNull();
   });
 
   it('passes a suppressed 201 through as DATA, not an error', async () => {
@@ -575,6 +617,140 @@ describe('retries', () => {
     expect(error!.statusCode).toBe(503);
     expect(server.requests).toHaveLength(1);
   });
+
+  it('waits out a 503 Retry-After within the cap, then retries with the SAME key', async () => {
+    server = await startMockServer([
+      {
+        status: 503,
+        headers: { 'retry-after': '1' },
+        body: { statusCode: 503, message: 'emailSending.sendFailed' },
+      },
+      { status: 201, body: sentRecord },
+    ]);
+
+    const startedAt = Date.now();
+    const { data, error } = await build().emails.send({
+      to: 'a@b.co',
+      subject: 's',
+      html: '<p>x</p>',
+    });
+
+    expect(error).toBeNull();
+    expect(data!.status).toBe('sent');
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests[1]!.headers['idempotency-key']).toBe(
+      server.requests[0]!.headers['idempotency-key'],
+    );
+    // The server's second, not the first backoff step (400 to 500 ms).
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(950);
+  });
+
+  it('hands a 503 back at once when its Retry-After exceeds the cap, for a queue', async () => {
+    // 300 s: the provider account cannot send. Sleeping in-process would
+    // hold the caller for minutes; a queue reschedules it instead.
+    server = await startMockServer([
+      {
+        status: 503,
+        headers: { 'retry-after': '300' },
+        body: { statusCode: 503, message: 'emailSending.sendFailed' },
+      },
+      { status: 201, body: sentRecord },
+    ]);
+
+    const { error } = await build().emails.send({
+      to: 'a@b.co',
+      subject: 's',
+      html: '<p>x</p>',
+    });
+
+    expect(server.requests).toHaveLength(1);
+    expect(error!.statusCode).toBe(503);
+    expect(error!.code).toBe('emailSending.sendFailed');
+    expect(error!.retryAfterSeconds).toBe(300);
+    expect(error!.retryable).toBe(true);
+    expect(error!.idempotencyKey).toBe(
+      server.requests[0]!.headers['idempotency-key'],
+    );
+  });
+
+  it('hands a send held for hours back at once, with when the hold lifts', async () => {
+    // Each retry of a held send with attachments records another failed
+    // attempt, and the hold will not have lifted a second later.
+    server = await startMockServer([
+      {
+        status: 503,
+        headers: { 'retry-after': '7200' },
+        body: { statusCode: 503, message: 'emailSending.sendHeld' },
+      },
+      { status: 201, body: sentRecord },
+    ]);
+
+    const { error } = await build().emails.send({
+      to: 'a@b.co',
+      subject: 's',
+      html: '<p>x</p>',
+      attachments: [
+        { content: 'JVBERi0=', filename: 'r.pdf', type: 'application/pdf' },
+      ],
+    });
+
+    expect(server.requests).toHaveLength(1);
+    expect(error!.code).toBe('emailSending.sendHeld');
+    expect(error!.retryAfterSeconds).toBe(7200);
+    expect(error!.retryable).toBe(true);
+    expect(error!.idempotencyKey).toBe(
+      server.requests[0]!.headers['idempotency-key'],
+    );
+  });
+
+  it('reads Retry-After off a 503 it may not retry', async () => {
+    server = await startMockServer([
+      {
+        status: 503,
+        headers: { 'retry-after': '5' },
+        body: { statusCode: 503, message: 'serviceUnavailable' },
+      },
+      { status: 201, body: { id: 't-1' } },
+    ]);
+
+    const { error } = await build().templates.create({
+      name: 'n',
+      subject: 's',
+      bodyHtml: '<p>x</p>',
+      emailType: 'TRANSACTIONAL',
+    });
+
+    // Not replay-safe, so not retried even though the wait is short.
+    expect(server.requests).toHaveLength(1);
+    expect(error!.retryAfterSeconds).toBe(5);
+  });
+
+  it('never retries a 422 providerRejected: the provider refused the message for good', async () => {
+    server = await startMockServer([
+      {
+        status: 422,
+        body: {
+          statusCode: 422,
+          message: 'emailSending.providerRejected',
+          error: 'UNPROCESSABLE_ENTITY',
+          description: 'MessageRejected',
+        },
+      },
+      { status: 201, body: sentRecord },
+    ]);
+
+    const { data, error } = await build().emails.sendTemplate({
+      to: 'a@b.co',
+      templateId: 't-1',
+    });
+
+    expect(data).toBeNull();
+    expect(server.requests).toHaveLength(1);
+    expect(error!.statusCode).toBe(422);
+    expect(error!.code).toBe('emailSending.providerRejected');
+    expect(error!.description).toBe('MessageRejected');
+    expect(error!.retryable).toBe(false);
+  });
 });
 
 describe('edge cases', () => {
@@ -621,6 +797,7 @@ describe('edge cases', () => {
 
     expect(error!.statusCode).toBe(409);
     expect(error!.code).toBe('idempotency.keyReusedWithDifferentPayload');
+    expect(error!.retryable).toBe(false);
     expect(server.requests).toHaveLength(1);
   });
 
@@ -706,6 +883,43 @@ describe('review-pinned behaviors', () => {
     expect(error).toBeNull();
     expect(data!.status).toBe('sent');
     expect(server.requests).toHaveLength(2);
+  });
+
+  it('a requestInProgress left when the retries run out is retryable, with the key', async () => {
+    // The first attempt times out while the server is still sending; the
+    // retry finds that request still running. Its outcome is unknown (the
+    // mail may well have gone), so a job runner must retry with the same
+    // key, never dead-letter it and never mint a new one.
+    server = await startMockServer([
+      { hang: true },
+      {
+        status: 409,
+        body: {
+          statusCode: 409,
+          message: 'idempotency.requestInProgress',
+          error: 'CONFLICT',
+        },
+      },
+    ]);
+    const sdk = new SendHeron(KEY, {
+      baseUrl: server.url,
+      maxRetries: 1,
+      timeout: 150,
+    });
+
+    const { error } = await sdk.emails.send({
+      to: 'a@b.co',
+      subject: 's',
+      html: '<p>x</p>',
+    });
+
+    expect(server.requests).toHaveLength(2);
+    const key = server.requests[0]!.headers['idempotency-key'];
+    expect(server.requests[1]!.headers['idempotency-key']).toBe(key);
+    expect(error!.statusCode).toBe(409);
+    expect(error!.code).toBe('idempotency.requestInProgress');
+    expect(error!.retryable).toBe(true);
+    expect(error!.idempotencyKey).toBe(key);
   });
 
   it('429 retries even on a non-keyed write: it was never processed', async () => {

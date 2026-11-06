@@ -20,6 +20,8 @@ type WithoutSendAt = { sendAt?: undefined };
  *
  * - `data.status === 'sent'`       → accepted by the provider; persist
  *                                    `data.id` and `data.providerMessageId`.
+ *                                    `data.droppedRecipients` lists any copy
+ *                                    the gate refused; it went without them.
  * - `data.status === 'suppressed'` → the compliance gate refused; the reason
  *                                    is in `data.errorMessage`. Never retry.
  * - `isHeld(data)`                 → `queued` with a `holdReason`: waiting
@@ -28,10 +30,24 @@ type WithoutSendAt = { sendAt?: undefined };
  *                                    sends. It goes out by itself on the
  *                                    same record (`get(data.id)`). Never
  *                                    retry.
- * - `error.statusCode === 503`     → provider failure, attempt recorded; or
+ * - `error.statusCode === 503`     → the provider could not take it now,
+ *                                    attempt recorded; or
  *                                    `emailSending.sendHeld`, a send with
- *                                    attachments that cannot wait. Safe to
- *                                    retry with the same key.
+ *                                    attachments that cannot wait. Retry
+ *                                    with the same key after
+ *                                    `error.retryAfterSeconds` (waited out
+ *                                    here when it is 30 s or less).
+ * - `error.statusCode === 422`     → `emailSending.providerRejected`: the
+ *                                    provider refused the message itself,
+ *                                    its error name in `error.description`.
+ *                                    Final: never retry it.
+ * - `error.statusCode === 409`     → `idempotency.requestInProgress`: the
+ *                                    request with this key is still
+ *                                    running, and its outcome is unknown.
+ *                                    Retry later with
+ *                                    `error.idempotencyKey`. The other 409
+ *                                    (the key was reused with a different
+ *                                    payload) is a bug: never retry it.
  * - `error.statusCode === 429`     → rate limited; Retry-After was honored
  *                                    before the client gave up.
  *
