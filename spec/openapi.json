@@ -1276,7 +1276,7 @@
     },
     "/api/v1/emails/send": {
       "post": {
-        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, \"suppressed\" with the block reason in errorMessage when the compliance gate refused, or \"queued\" with a holdReason and heldUntil when it waits for daily capacity or new-sender warm-up and goes out by itself (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key; so does a send with attachments that would have to wait (emailSending.sendHeld), because attachments are never stored. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId. With sendAt the response is the scheduled email instead: its id is for DELETE /api/v1/emails/scheduled/{id}, not for GET /api/v1/emails/{id}.",
+        "description": "A 201 is an OUTCOME, not proof of dispatch: the returned send record has status \"sent\" when the provider accepted it, \"suppressed\" with the block reason in errorMessage when the compliance gate refused, or \"queued\" with a holdReason and heldUntil when it waits for daily capacity or new-sender warm-up and goes out by itself (never retry those). Copy recipients the gate refused are listed in droppedRecipients; the message went without them. A provider failure that may pass returns 503 with Retry-After and the failed attempt recorded: retry with the same idempotency key. So does a send with attachments that would have to wait (emailSending.sendHeld, Retry-After says when the hold lifts), because attachments are never stored. A message the provider refused for good returns 422 emailSending.providerRejected: do not retry it. Persist the returned id (for GET /api/v1/emails/{id}) and providerMessageId. With sendAt the response is the scheduled email instead: its id is for DELETE /api/v1/emails/scheduled/{id}, not for GET /api/v1/emails/{id}.",
         "operationId": "EmailsController_sendEmail",
         "parameters": [
           {
@@ -1301,19 +1301,25 @@
         },
         "responses": {
           "201": {
-            "description": "The send record — status \"sent\", \"suppressed\" with the refusal reason in errorMessage, or \"queued\" with holdReason and heldUntil while it waits. When sendAt is set, the scheduled email instead."
+            "description": "The send record — status \"sent\", \"suppressed\" with the refusal reason in errorMessage, or \"queued\" with holdReason and heldUntil while it waits; droppedRecipients names refused copies. When sendAt is set, the scheduled email instead."
+          },
+          "400": {
+            "description": "Invalid request, including headers SES would refuse and more than 50 recipients in total (emailSending.tooManyRecipients)"
           },
           "401": {
             "description": "Unauthorized — invalid or missing API key"
           },
           "409": {
-            "description": "Idempotency conflict — the key is in flight, or was reused with a different payload"
+            "description": "Idempotency conflict — the key is in flight (idempotency.requestInProgress: retry later with the same key), or was reused with a different payload"
+          },
+          "422": {
+            "description": "The provider refused the message itself (emailSending.providerRejected, the provider error name in description). The FAILED attempt is recorded; sending it again fails the same way."
           },
           "429": {
             "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
           },
           "503": {
-            "description": "The provider refused the send, or a send with attachments would have had to wait (emailSending.sendHeld). The FAILED attempt is recorded; retry with the same idempotency key."
+            "description": "The provider could not take the send now, or a send with attachments would have had to wait (emailSending.sendHeld). The FAILED attempt is recorded; retry with the same idempotency key after Retry-After."
           }
         },
         "security": [
@@ -1421,7 +1427,7 @@
     },
     "/api/v1/emails/send-template": {
       "post": {
-        "description": "Renders a template with the provided variables and sends it. With sendAt, the template REFERENCE is stored and rendering, the contact merge and every gate run when it fires. A 201 is an OUTCOME: status \"sent\", \"suppressed\" with the block reason in errorMessage, or \"queued\" with a holdReason while it waits for capacity (never retry those). Provider failures return 503 with the failed attempt recorded — retry with the same idempotency key; so does a send with attachments that would have to wait (emailSending.sendHeld). A template that fails to compile is a 400 (templates.renderFailed). Attachments require a TRANSACTIONAL template.",
+        "description": "Renders a template with the provided variables and sends it. With sendAt, the template REFERENCE is stored and rendering, the contact merge and every gate run when it fires. A 201 is an OUTCOME: status \"sent\", \"suppressed\" with the block reason in errorMessage, or \"queued\" with a holdReason while it waits for capacity (never retry those); droppedRecipients names refused copies. A provider failure that may pass returns 503 with Retry-After and the failed attempt recorded: retry with the same idempotency key; so does a send with attachments that would have to wait (emailSending.sendHeld). A message the provider refused for good returns 422 emailSending.providerRejected. A template that fails to compile is a 400 (templates.renderFailed). Attachments require a TRANSACTIONAL template.",
         "operationId": "EmailsController_sendTemplateEmail",
         "parameters": [
           {
@@ -1457,11 +1463,14 @@
           "409": {
             "description": "Idempotency conflict: the key is in flight, or was reused with a different payload"
           },
+          "422": {
+            "description": "The provider refused the message itself (emailSending.providerRejected). The FAILED attempt is recorded; sending it again fails the same way."
+          },
           "429": {
             "description": "Too many requests — rate limit exceeded. Retry-After says when the window resets; the idempotency key is untouched."
           },
           "503": {
-            "description": "The provider refused the send, or a send with attachments would have had to wait (emailSending.sendHeld). The FAILED attempt is recorded; retry with the same idempotency key."
+            "description": "The provider could not take the send now, or a send with attachments would have had to wait (emailSending.sendHeld). The FAILED attempt is recorded; retry with the same idempotency key after Retry-After."
           }
         },
         "security": [
@@ -3738,7 +3747,7 @@
           },
           "fromName": {
             "type": "string",
-            "description": "Display name for this send, overriding the sender identity's. The address is what domain verification gates; the name may vary per send (one verified address, several product names). No CR/LF or angle brackets.",
+            "description": "Display name for this send, overriding the sender identity's. The address is what domain verification gates; the name may vary per send (one verified address, several product names). Any script is fine (encoded for the header). No CR/LF or angle brackets. Without one, the identity's name; without that, the bare address.",
             "example": "Acme Billing"
           },
           "replyTo": {
@@ -3746,7 +3755,7 @@
             "description": "Reply-To address"
           },
           "cc": {
-            "description": "Carbon-copy recipients. Each address is checked against the suppression list independently — a cc is a real delivery.",
+            "description": "Carbon-copy recipients. Each address is checked against the suppression list independently — a cc is a real delivery; a refused one is listed in droppedRecipients. At most 50 recipients in total, To included.",
             "type": "array",
             "items": {
               "type": "string"
@@ -3761,7 +3770,7 @@
           },
           "headers": {
             "type": "object",
-            "description": "Custom headers. Headers the platform owns (List-Unsubscribe, authentication, envelope) are rejected rather than dropped.",
+            "description": "Custom headers. Headers the platform owns (List-Unsubscribe, authentication, envelope) are rejected rather than dropped. Printable ASCII only: a name of at most 126 characters, a value of at most 995, both together at most 996.",
             "additionalProperties": {
               "type": "string"
             }
@@ -3827,7 +3836,7 @@
           },
           "fromName": {
             "type": "string",
-            "description": "Display name for this send, overriding the sender identity's. The address is what domain verification gates; the name may vary per send. No CR/LF or angle brackets.",
+            "description": "Display name for this send, overriding the sender identity's. The address is what domain verification gates; the name may vary per send. Any script is fine (encoded for the header). No CR/LF or angle brackets. Without one, the identity's name; without that, the bare address.",
             "example": "Acme Billing"
           },
           "replyTo": {
@@ -3836,7 +3845,7 @@
             "example": "support@yourdomain.com"
           },
           "cc": {
-            "description": "Carbon-copy recipients. Each address is checked against the suppression list independently — a cc is a real delivery, and a blocked copy is dropped without failing the message.",
+            "description": "Carbon-copy recipients. Each address is checked against the suppression list independently — a cc is a real delivery, and a blocked copy is dropped without failing the message and listed in droppedRecipients. At most 50 recipients in total, To included.",
             "type": "array",
             "items": {
               "type": "string"

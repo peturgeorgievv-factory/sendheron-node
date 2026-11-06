@@ -30,10 +30,16 @@ source (MIT). Everything committed here is world-readable, and the shipped
 - A 201 is an outcome: `status: 'sent' | 'suppressed'`. Suppressed is data,
   never an error, never retried.
 - Retry policy: 429 retries on every method honoring Retry-After (30s wait
-  cap; beyond it the error surfaces instead of burning attempts); 5xx,
-  timeouts and network failures retry only replay-safe requests (reads, and
-  email sends carrying an idempotency key); 409 requestInProgress retries
-  until the server replays; the other 409 never retries.
+  cap; beyond it the error surfaces at once with `retryAfterSeconds`
+  instead of burning attempts or sleeping for minutes); 5xx, timeouts and
+  network failures retry only replay-safe requests (reads, and email sends
+  carrying an idempotency key), and a 503 honors Retry-After under the
+  same cap (the API sends it on every send 503; without it, backoff); 409
+  requestInProgress retries until the server replays; the other 409 and
+  the 422 `emailSending.providerRejected` never retry.
+- `error.retryable` is true for no response (except `aborted`), 429, 5xx
+  and 409 requestInProgress (outcome unknown: retry with the same key),
+  and false for every other 4xx. Job runners dead-letter on false.
 - Auto-idempotency: email sends mint a key BEFORE the retry loop and reuse
   it across attempts; `error.idempotencyKey` exposes it for caller resume.
 - `error.retryable` and the block-reason groupings

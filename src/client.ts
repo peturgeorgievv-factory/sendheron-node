@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type Result, SendHeronError } from './errors.js';
+import { IN_PROGRESS_CODE, type Result, SendHeronError } from './errors.js';
 import { VERSION } from './version.js';
 
 export interface ClientOptions {
@@ -9,8 +9,10 @@ export interface ClientOptions {
    * Retries AFTER the first attempt. 429 always retries (a rate-limited
    * request was never processed), waiting per Retry-After; 5xx and network
    * failures retry only when the request is retry-safe (a read, or an email
-   * send carrying an idempotency key), with exponential backoff.
-   * Default 2; 0 disables.
+   * send carrying an idempotency key), with exponential backoff, except
+   * that a 503 waits per its Retry-After too. A Retry-After over 30 seconds
+   * is never slept: the error returns at once with `retryAfterSeconds`, for
+   * a queue to reschedule. Default 2; 0 disables.
    */
   maxRetries?: number;
   /** Per-attempt timeout in milliseconds. Default 60000. */
@@ -47,10 +49,9 @@ const IDEMPOTENCY_HEADER = 'idempotency-key';
 /** The server implements idempotency on these routes only. */
 const IDEMPOTENT_PATH_PREFIX = '/api/v1/emails/';
 const RETRYABLE_STATUSES = new Set([500, 502, 503, 504]);
-const IN_PROGRESS_CODE = 'idempotency.requestInProgress';
 const BACKOFF_BASE_MS = 400;
 const BACKOFF_CAP_MS = 5_000;
-/** A Retry-After beyond this is not worth burning an attempt on. */
+/** A Retry-After beyond this goes back to the caller instead of being slept. */
 const RETRY_AFTER_CAP_MS = 30_000;
 
 /** Resolves early when the signal aborts; the caller re-checks the signal. */
@@ -266,14 +267,16 @@ export class HttpClient {
   /**
    * Null = do not retry. Policy:
    * - 429 retries on EVERY method (a rate-limited request was never
-   *   processed), honoring Retry-After: unless waiting would exceed the
-   *   cap, where burning an attempt that will certainly 429 again helps
-   *   nobody.
+   *   processed), honoring Retry-After.
    * - 409 "request in progress" retries only replay-safe requests: the
    *   concurrent original completes and a later attempt lands on the
    *   server's replay branch. The OTHER 409 (key reused with a different
    *   payload) is a caller bug and never retries.
-   * - 5xx retries only replay-safe requests.
+   * - 5xx retries only replay-safe requests. A 503 honors Retry-After: the
+   *   API sends it on every send 503, the time until the provider may take
+   *   the send again or a hold lifts.
+   * - Everything else never retries, the 422 for a message the provider
+   *   refused for good included: it would fail the same way.
    */
   private retryDelayMs(
     status: number,
@@ -288,11 +291,7 @@ export class HttpClient {
     }
 
     if (status === 429) {
-      const wait =
-        retryAfterSeconds !== undefined
-          ? retryAfterSeconds * 1000
-          : this.backoff(attempt);
-      return wait <= RETRY_AFTER_CAP_MS ? wait : null;
+      return this.retryAfterDelayMs(retryAfterSeconds, attempt);
     }
 
     if (status === 409 && code === IN_PROGRESS_CODE && safeForReplay) {
@@ -300,10 +299,29 @@ export class HttpClient {
     }
 
     if (RETRYABLE_STATUSES.has(status) && safeForReplay) {
-      return this.backoff(attempt);
+      return status === 503
+        ? this.retryAfterDelayMs(retryAfterSeconds, attempt)
+        : this.backoff(attempt);
     }
 
     return null;
+  }
+
+  /**
+   * The wait the server asked for (backoff when it named none), or null
+   * when it exceeds the cap: an attempt that would certainly be refused
+   * again helps nobody, and a queue reschedules a long wait better than a
+   * process sleeping through it.
+   */
+  private retryAfterDelayMs(
+    retryAfterSeconds: number | undefined,
+    attempt: number,
+  ): number | null {
+    const wait =
+      retryAfterSeconds !== undefined
+        ? retryAfterSeconds * 1000
+        : this.backoff(attempt);
+    return wait <= RETRY_AFTER_CAP_MS ? wait : null;
   }
 
   private buildUrl(

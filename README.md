@@ -40,18 +40,22 @@ const { data, error } = await sendheron.emails.send({
 });
 
 if (error) {
-  // 4xx: a request bug (error.code is a stable key). 429/5xx: the SDK
-  // already retried per its policy before handing you this. A 503
-  // 'emailSending.sendHeld' means the send would have had to wait (daily
-  // capacity or warm-up), which a send with attachments cannot do: retry
-  // it later with error.idempotencyKey.
+  // The SDK already retried per its policy before handing you this.
+  // error.retryable: send it again later with error.idempotencyKey, after
+  // error.retryAfterSeconds when set. A 503 'emailSending.sendHeld' is
+  // one: the send would have had to wait (daily capacity or warm-up),
+  // which a send with attachments cannot do. Otherwise it is final: a 4xx
+  // request bug (error.code is a stable key), or a 422
+  // 'emailSending.providerRejected', a message the provider refused for
+  // good. See Errors below.
   throw error;
 }
 
 switch (data.status) {
   case 'sent':
     // Accepted by the provider. Persist data.id (readable back via
-    // emails.get) and data.providerMessageId.
+    // emails.get) and data.providerMessageId. data.droppedRecipients
+    // lists any cc or bcc the compliance gate refused: it went without them.
     break;
   case 'suppressed':
     // The compliance gate refused: data.errorMessage is a stable reason
@@ -126,7 +130,9 @@ true, and they go out by themselves.
 Attachments are never stored, so a send carrying them cannot wait: where it
 would, it answers `503` with `error.code` `emailSending.sendHeld` instead.
 That error is retryable like any provider `503`: send again later with the
-same idempotency key (`error.idempotencyKey`). `usage.get()` reports the
+same idempotency key (`error.idempotencyKey`), once the hold lifts:
+`error.retryAfterSeconds` says when. That can be hours, so the SDK hands
+it back at once instead of sleeping through it. `usage.get()` reports the
 daily position and the warm-up under `sending`; the lines themselves are in
 the API reference under Daily sending.
 
@@ -135,14 +141,22 @@ the API reference under Daily sending.
 - **429** retries on every method (a rate-limited request was never
   processed), waiting per `Retry-After`. **5xx, timeouts and network
   failures** retry with exponential backoff, but only on replay-safe
-  requests: reads, and email sends carrying an idempotency key. Two retries
-  by default; `maxRetries: 0` disables (per call too, via options).
+  requests: reads, and email sends carrying an idempotency key. A **503**
+  waits per its `Retry-After` instead, which the API sends on every send
+  `503`. A wait over 30 seconds is never slept: the error comes back at
+  once with `retryAfterSeconds`, for your queue to reschedule. Two retries
+  by default; `maxRetries: 0` disables them (per call too, via options),
+  which suits code a person is waiting on.
 - Every email send gets an **idempotency key automatically** and reuses it
   across the SDK's internal retries: a timeout can never double-send, even
   if you have never heard of the header. A concurrent-duplicate `409
   requestInProgress` is also retried until the server replays the original
-  response. Pass your own key for business-level dedup across *your*
-  retries:
+  response. If the original is still running when the retries run out, the
+  `409` is `retryable`, since its outcome is not known yet: retry later
+  with the same key. You get the original's response once it has finished,
+  and a key still in progress 10 minutes after it was claimed is taken over
+  by the next retry. Pass your own key for business-level dedup across
+  *your* retries:
 
   ```ts
   await sendheron.emails.sendTemplate(payload, { idempotencyKey: `receipt-${orderId}` });
@@ -156,6 +170,32 @@ the API reference under Daily sending.
   expire after 24 hours.
 - API failures are **returned, never thrown**: every call resolves to
   `{ data, error }`.
+
+## Errors
+
+An error is a `SendHeronError` with the HTTP `statusCode` (null when no
+answer arrived) and a stable `code`. `error.retryable` says whether the same
+request can still succeed. When it is true, send it again later with the
+same idempotency key (`error.idempotencyKey`: a fresh one could send
+twice), after `error.retryAfterSeconds` when that is set. When it is false,
+fail the job: the same request fails the same way.
+
+On the send routes:
+
+| `statusCode` | `code` | What happened | `retryable` |
+| --- | --- | --- | --- |
+| 400 | such as `emailSending.tooManyRecipients`, `emailSending.invalidHeaderValue` | The request is wrong: over 50 recipients in total, `to` included, or a header SES would refuse. Nothing was recorded. | false |
+| 409 | `idempotency.requestInProgress` | The request with this key is still running, so its outcome is not known yet. | true |
+| 409 | `idempotency.keyReusedWithDifferentPayload` | The key was already used for a different request. | false |
+| 422 | `emailSending.providerRejected` | The provider refused the message itself, with its error name (such as `MessageRejected`) in `error.description`. The failed attempt is recorded. | false |
+| 429 | `rate_limited` | Rate limited. The request was never processed. | true |
+| 503 | `emailSending.sendFailed` | The provider could not take the send now. The failed attempt is recorded. `retryAfterSeconds` is 30, or 300 when the sending account itself cannot send. | true |
+| 503 | `emailSending.sendHeld` | A send with attachments would have had to wait. `retryAfterSeconds` is when the hold lifts. | true |
+| null | `timeout`, `network_error` | No answer arrived, so the send may or may not have gone. | true |
+| null | `aborted` | Your `signal` aborted the call. | false |
+
+Any other 4xx (a bad key, a missing scope, an unknown template) is a
+request bug, never retryable.
 
 ## Resources
 

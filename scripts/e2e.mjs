@@ -14,8 +14,10 @@
  * SES mailbox simulator (or is refused by the compliance gate when the
  * workspace has no sender configured, or while the organization is still
  * under sender review, or is held for daily capacity or warm-up and goes
- * out by itself later, each of which is itself a probed outcome). The
- * signup probe names a form that does not exist, so nothing is mailed.
+ * out by itself later, each of which is itself a probed outcome). A second
+ * send to the simulator carries a header SES would refuse, and the API
+ * refuses it before anything is recorded. The signup probe names a form
+ * that does not exist, so nothing is mailed.
  * Run `pnpm build` first; this imports dist/.
  */
 import { exit } from 'node:process';
@@ -243,7 +245,8 @@ let sendId;
 }
 
 // read the send back by id: every engagement counter is present, people
-// and machines apart, and so are the warm-up flag and the import slice
+// and machines apart, and so are the warm-up flag, the import slice and
+// the dropped copies (null: this send had none)
 {
   const { data, error } = await sdk.emails.get(sendId);
   record(
@@ -259,8 +262,31 @@ let sendId;
       ].every((count) => typeof data[count] === 'number') &&
       typeof data.warmupFirstContact === 'boolean' &&
       (data.contactImportId === null ||
-        typeof data.contactImportId === 'string'),
-    error?.code,
+        typeof data.contactImportId === 'string') &&
+      data.droppedRecipients === null,
+    error?.code ??
+      `droppedRecipients=${JSON.stringify(data?.droppedRecipients)}`,
+  );
+}
+
+// a header SES would refuse is a 400 before anything is recorded, never a
+// provider refusal after the attempt
+{
+  const { error } = await sdk.emails.send(
+    {
+      to: SIMULATOR_SUCCESS,
+      subject: 'sdk e2e',
+      html: '<p>e2e probe</p>',
+      headers: { 'X-Sdk-E2e': 'café' },
+    },
+    { maxRetries: 0 },
+  );
+  record(
+    'non-ASCII header value is 400',
+    error?.statusCode === 400 &&
+      error.code === 'emailSending.invalidHeaderValue' &&
+      error.retryable === false,
+    error?.code ?? 'accepted',
   );
 }
 
