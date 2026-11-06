@@ -1,5 +1,6 @@
 import { type ClientOptions, HttpClient } from './client.js';
 import { Emails } from './resources/emails.js';
+import { Forms } from './resources/forms.js';
 import { Suppressions } from './resources/suppressions.js';
 import { Templates } from './resources/templates.js';
 import { Usage } from './resources/usage.js';
@@ -44,6 +45,7 @@ export class SendHeron {
   readonly templates: Templates;
   readonly suppressions: Suppressions;
   readonly usage: Usage;
+  readonly forms: Forms;
 
   constructor(apiKey?: string, options?: ClientOptions) {
     const client = new HttpClient(apiKey, options);
@@ -51,6 +53,7 @@ export class SendHeron {
     this.templates = new Templates(client);
     this.suppressions = new Suppressions(client);
     this.usage = new Usage(client);
+    this.forms = new Forms(client);
   }
 }
 

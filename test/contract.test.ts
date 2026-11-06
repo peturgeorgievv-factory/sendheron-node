@@ -29,6 +29,7 @@ describe('contract pins', () => {
       '/api/v1/suppressions/check',
       '/api/v1/suppressions/{email}',
       '/api/v1/usage',
+      '/api/v1/forms/{formId}/signups',
     ];
 
     for (const route of sdkRoutes) {

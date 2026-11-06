@@ -571,6 +571,37 @@ export interface EmailDeliverability {
   transactional: ChannelDeliverability;
 }
 
+/**
+ * One signup through a form, from your server. No status, list, tag or
+ * consent fields: the form decides those. A field it does not take is a 400.
+ */
+export interface FormSignupPayload {
+  /** Gets the confirmation email; nothing happens until its owner confirms. Max 254 characters. */
+  email: string;
+  /**
+   * The visitor's IP address as your server saw it: behind Cloudflare the
+   * `CF-Connecting-IP` header, never an `X-Forwarded-For` value the visitor
+   * can write. Kept on the consent record, and counted toward the
+   * per-visitor limit.
+   */
+  ipAddress: string;
+  /** Kept only when the form shows the field; required when the form requires it. Max 100 characters. */
+  firstName?: string | undefined;
+  /** Kept only when the form shows the field; required when the form requires it. Max 100 characters. */
+  lastName?: string | undefined;
+  /** The visitor's User-Agent header, kept on the consent record. Max 512 characters. */
+  userAgent?: string | undefined;
+}
+
+/**
+ * The same for every address: new, already waiting for its confirmation,
+ * already subscribed, or one SendHeron will not mail. Show the visitor
+ * "check your inbox" and nothing more.
+ */
+export interface FormSignupAccepted {
+  status: 'accepted';
+}
+
 export type PlanGateStatus = 'ACTIVE' | 'LAPSED' | 'UNLIMITED';
 
 /**
@@ -664,6 +695,25 @@ export interface SendingCapacityUsage {
   warmup: WarmupUsage;
 }
 
+/**
+ * The signup forms of the API key's workspace: the one workspace-scoped
+ * block of the usage, since forms and their cap are per workspace.
+ */
+export interface SignupFormsUsage {
+  /**
+   * Forms in this workspace against the per-workspace cap, which is the same
+   * on every plan: unlike the plan caps, `cap` and `remaining` are never
+   * null here.
+   */
+  forms: CountUsage;
+  /** Signups waiting for their confirmation click, not yet expired. */
+  pendingSignups: number;
+  /** Signups that became subscribed contacts in the last 30 days. */
+  confirmedLast30Days: number;
+  /** Forms under attack right now: held to a trickle, every signup double opt-in. */
+  underAttack: number;
+}
+
 export interface OrganizationUsage {
   plan: {
     status: PlanGateStatus;
@@ -716,6 +766,8 @@ export interface OrganizationUsage {
    * new-sender warm-up. Null when the position cannot be reported.
    */
   sending: SendingCapacityUsage | null;
+  /** The signup forms of the API key's workspace. Never null. */
+  signupForms: SignupFormsUsage;
   rateLimits: {
     perKeyPerMinute: number;
     organizationPerMinute: {

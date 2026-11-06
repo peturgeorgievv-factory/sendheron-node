@@ -16,8 +16,11 @@ export class Usage {
    * account is still under sender review, from a send being refused.
    * `sending` is the rolling 24-hour position on the shared sending quota
    * and the new-sender warm-up: `sending.held` counts the sends waiting
-   * now. Pool and plan-cap numbers are null for organizations without an
-   * active subscription cap.
+   * now. `signupForms`, the one workspace-scoped block, reports the signup
+   * forms of the API key's workspace: forms against their cap, signups
+   * waiting for their confirmation click, signups that became contacts in
+   * the last 30 days, and forms under attack right now. Pool and plan-cap
+   * numbers are null for organizations without an active subscription cap.
    */
   get(options?: RequestOptions): Promise<Result<OrganizationUsage>> {
     return this.client.get('/api/v1/usage', undefined, options);

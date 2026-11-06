@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type CountUsage,
+  type FormSignupAccepted,
   isHeld,
   isSenderSideBlock,
   type ScreeningReason,
@@ -9,6 +10,7 @@ import {
   SendHeronError,
   type SendHoldReason,
   type SendingCapacityUsage,
+  type SignupFormsUsage,
   type WarmupStatus,
   type WarmupUsage,
 } from '../src/index.js';
@@ -1364,6 +1366,56 @@ describe('request shaping', () => {
     expect(sending.transactionalLast24Hours).toBeNull();
     expect(sending.marketingRemaining).toBeNull();
   });
+
+  it("reads the signup forms of the key's workspace, capped on every plan", async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          plan: {
+            status: 'UNLIMITED',
+            name: null,
+            trialEndsAt: null,
+            lapsedReason: null,
+            sendingReview: 'APPROVED',
+          },
+          monthlySends: {
+            used: 766,
+            pool: null,
+            marketingRemaining: null,
+            transactionalCeiling: null,
+            transactionalRemaining: null,
+            resetsAt: '2026-12-01T00:00:00.000Z',
+          },
+          contacts: { subscribed: 4120, cap: null, remaining: null },
+          domains: { used: 3, cap: null, remaining: null },
+          workspaces: { used: 4, cap: null, remaining: null },
+          teamMembers: { used: 6, cap: null, remaining: null },
+          sending: sendingPosition,
+          signupForms: {
+            forms: { used: 12, cap: 100, remaining: 88 },
+            pendingSignups: 41,
+            confirmedLast30Days: 380,
+            underAttack: 1,
+          },
+          rateLimits: {
+            perKeyPerMinute: 100,
+            organizationPerMinute: { READ: 1200, WRITE: 400, SEND: 200 },
+          },
+        },
+      },
+    ]);
+
+    const { data } = await build().usage.get();
+
+    // The plan caps are null on an unlimited plan; the forms cap is not one.
+    expect(data!.domains.cap).toBeNull();
+    const signupForms: SignupFormsUsage = data!.signupForms;
+    expect(signupForms.forms).toEqual({ used: 12, cap: 100, remaining: 88 });
+    expect(signupForms.pendingSignups).toBe(41);
+    expect(signupForms.confirmedLast30Days).toBe(380);
+    expect(signupForms.underAttack).toBe(1);
+  });
 });
 
 describe('templates', () => {
@@ -1561,5 +1613,98 @@ describe('templates', () => {
     for (const request of server.requests) {
       expect(JSON.parse(request.body)).toEqual({ document: blockDocument });
     }
+  });
+});
+
+describe('forms', () => {
+  const FORM_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+  const signup = {
+    email: 'jane@example.com',
+    ipAddress: '203.0.113.7',
+    firstName: 'Jane',
+    userAgent: 'Mozilla/5.0',
+  };
+
+  it('signs up through a form: 202 accepted, the body as given', async () => {
+    server = await startMockServer([
+      { status: 202, body: { status: 'accepted' } },
+    ]);
+
+    const { data, error } = await build().forms.signup(FORM_ID, signup);
+
+    expect(error).toBeNull();
+    const accepted: FormSignupAccepted = data!;
+    expect(accepted).toEqual({ status: 'accepted' });
+    const request = server.requests[0]!;
+    expect(request.method).toBe('POST');
+    expect(request.url).toBe(`/api/v1/forms/${FORM_ID}/signups`);
+    expect(JSON.parse(request.body)).toEqual(signup);
+    // Not an email route: no idempotency key is minted.
+    expect(request.headers['idempotency-key']).toBeUndefined();
+  });
+
+  it('encodes the form id into the path', async () => {
+    server = await startMockServer([
+      {
+        status: 404,
+        body: { statusCode: 404, message: 'signupForms.notFound' },
+      },
+    ]);
+
+    const { error } = await build().forms.signup('a/b?c', signup);
+
+    expect(server.requests[0]!.url).toBe('/api/v1/forms/a%2Fb%3Fc/signups');
+    expect(error!.code).toBe('signupForms.notFound');
+  });
+
+  it('surfaces a form that takes no signups as a typed 409, with the reason', async () => {
+    server = await startMockServer([
+      {
+        status: 409,
+        body: {
+          statusCode: 409,
+          message: 'signupForms.unavailable',
+          error: 'This form is not taking signups (SWITCHED_OFF).',
+        },
+      },
+    ]);
+
+    const { data, error } = await build().forms.signup(FORM_ID, signup);
+
+    expect(data).toBeNull();
+    expect(error!.statusCode).toBe(409);
+    expect(error!.code).toBe('signupForms.unavailable');
+    expect(error!.description).toContain('SWITCHED_OFF');
+    expect(error!.retryable).toBe(false);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('never retries a 5xx: a signup is not replay-safe', async () => {
+    server = await startMockServer([
+      { status: 503, body: { statusCode: 503, message: 'oops' } },
+      { status: 202, body: { status: 'accepted' } },
+    ]);
+
+    const { error } = await build().forms.signup(FORM_ID, signup);
+
+    expect(error!.statusCode).toBe(503);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('surfaces a per-visitor limit past the wait cap at once', async () => {
+    server = await startMockServer([
+      {
+        status: 429,
+        headers: { 'retry-after': '3600' },
+        body: { statusCode: 429, message: 'tooManyRequests' },
+      },
+      { status: 202, body: { status: 'accepted' } },
+    ]);
+
+    const { error } = await build().forms.signup(FORM_ID, signup);
+
+    expect(error!.code).toBe('rate_limited');
+    expect(error!.retryAfterSeconds).toBe(3600);
+    expect(server.requests).toHaveLength(1);
   });
 });
