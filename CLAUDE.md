@@ -67,8 +67,10 @@ path the SDK calls.
   api.sendheron.com unless `SENDHERON_E2E_ALLOW_LIVE=1`. It creates and
   deletes a template and a manual suppression and sends only to the SES
   mailbox simulator, so nothing real is mailed. Deliberately not in CI.
-- The toolchain needs Node >= 22.13 (pnpm 11); the SHIPPED package supports
-  Node >= 20. `engines` describes consumers, not the toolchain.
+- The toolchain needs Node 22.18+, 24.11+ or 26+ (tsup 9); the SHIPPED
+  package supports Node >= 20. `engines` describes consumers, not the
+  toolchain. TypeScript stays on 6.x: 7.0 ships no JS compiler API, which
+  tsup's declaration build needs.
 
 ## Releasing
 

@@ -14,7 +14,8 @@
  * SES mailbox simulator (or is refused by the compliance gate when the
  * workspace has no sender configured, or while the organization is still
  * under sender review, or is held for daily capacity or warm-up and goes
- * out by itself later, each of which is itself a probed outcome).
+ * out by itself later, each of which is itself a probed outcome). The
+ * signup probe names a form that does not exist, so nothing is mailed.
  * Run `pnpm build` first; this imports dist/.
  */
 import { exit } from 'node:process';
@@ -53,7 +54,8 @@ const record = (name, ok, detail) => {
 };
 
 // usage: shape parses whatever the plan state; the sender review is never
-// null, every plan cap is reported, and so is the daily sending position
+// null, every plan cap is reported, and so are the daily sending position
+// and the workspace's signup forms
 {
   const { data, error } = await sdk.usage.get();
   record(
@@ -68,7 +70,11 @@ const record = (name, ok, detail) => {
         (typeof data.sending.held === 'number' &&
           ['WARMING', 'HELD', 'COMPLETE'].includes(
             data.sending.warmup?.status,
-          ))),
+          ))) &&
+      typeof data.signupForms?.forms?.cap === 'number' &&
+      ['pendingSignups', 'confirmedLast30Days', 'underAttack'].every(
+        (count) => typeof data.signupForms[count] === 'number',
+      ),
     error?.code ??
       `plan=${data?.plan.status} review=${data?.plan.sendingReview} warmup=${data?.sending?.warmup?.status ?? 'none'}`,
   );
@@ -291,6 +297,23 @@ let sendId;
     'suppression round trip',
     !addError && verdict?.suppressed === true && !removeError,
     addError?.code ?? removeError?.code,
+  );
+}
+
+// a signup to a form that does not exist is a typed 404 value, or a 403
+// when the key lacks signups:create; either way nothing is mailed
+{
+  const { error } = await sdk.forms.signup(
+    '00000000-0000-4000-8000-000000000000',
+    { email: SIMULATOR_SUCCESS, ipAddress: '203.0.113.7' },
+    { maxRetries: 0 },
+  );
+  record(
+    'forms.signup unknown form',
+    (error?.statusCode === 404 && error.code === 'signupForms.notFound') ||
+      (error?.statusCode === 403 &&
+        error.code === 'apiKeys.insufficientScopes'),
+    error?.code ?? 'accepted',
   );
 }
 

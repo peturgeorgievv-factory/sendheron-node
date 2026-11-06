@@ -186,10 +186,16 @@ sendheron.suppressions.add({ email, note })
 sendheron.suppressions.remove(email, { confirmHardTier: true })
 
 // Usage
-sendheron.usage.get() // pool position, plan caps, daily sending + rate
-                      // ceilings: monitor monthlySends.transactionalRemaining,
+sendheron.usage.get() // pool position, plan caps, daily sending, signup
+                      // forms + rate ceilings: monitor
+                      // monthlySends.transactionalRemaining,
                       // plan.trialEndsAt / plan.lapsedReason,
-                      // plan.sendingReview, and sending.held / sending.warmup
+                      // plan.sendingReview, sending.held / sending.warmup,
+                      // and signupForms
+
+// Forms
+sendheron.forms.signup(formId, { email, ipAddress }) // double opt-in, from
+                                                     // your server only
 ```
 
 A template's `previewText` is the line inboxes show after the subject.
@@ -202,6 +208,73 @@ it with your `sampleData` into `renderedPreviewText`, beside
 `renderedSubject`, and `validate(document, previewText)` counts its
 preheader toward the size limit, so a builder document at the edge of that
 limit can be refused once preview text is added.
+
+## Signup forms
+
+`forms.signup()` signs someone up through a signup form you build
+yourself. Call it from your server, never the browser: the API key is a
+secret. Give that server its own key holding only the `signups:create`
+scope: such a key can do nothing else. The signup is always double opt-in,
+whatever the form's own setting: the person gets the form's confirmation
+email and joins the form's list only once they confirm. The form decides
+the consent sentence kept on the record, so show your visitor that exact
+sentence next to your form.
+
+A Next.js Server Action:
+
+```ts
+'use server';
+
+import { headers } from 'next/headers';
+import { SendHeron } from 'sendheron';
+
+// For useActionState(subscribe, '') in a client component.
+export async function subscribe(_previous: string, formData: FormData) {
+  // This action is public: run your bot check (Cloudflare Turnstile,
+  // verified here on the server) and your own per-visitor limit first.
+  const h = await headers();
+  // The visitor's real address: behind Cloudflare the CF-Connecting-IP
+  // header, never an X-Forwarded-For value the visitor can write.
+  const ipAddress = h.get('cf-connecting-ip');
+  if (!ipAddress) return 'Something went wrong. Please try again later.';
+
+  const sendheron = new SendHeron(process.env.SENDHERON_SIGNUP_KEY);
+  const { error } = await sendheron.forms.signup(
+    '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    {
+      email: String(formData.get('email') ?? ''),
+      ipAddress,
+      userAgent: h.get('user-agent') ?? undefined,
+    },
+    // A visitor is waiting: answer a 429 at once instead of waiting it out.
+    { maxRetries: 0 },
+  );
+
+  if (
+    error?.code === 'signupForms.invalidEmail' ||
+    error?.code === 'signupForms.undeliverableEmail'
+  ) {
+    return 'Please check your email address.';
+  }
+  if (error) return 'Something went wrong. Please try again later.';
+  // The same answer for every address: say nothing more.
+  return 'Check your inbox to confirm.';
+}
+```
+
+The answer is the same `{ status: 'accepted' }` for every address (new,
+already waiting for its confirmation, already subscribed, or one SendHeron
+will not mail), so it cannot tell anyone whether an address is subscribed.
+Limits: 30 a minute per key, hourly and daily ceilings per key, and a
+per-visitor limit on the IP address you report, each a `429` with
+`Retry-After`. A form that takes no signups answers `409`
+`signupForms.unavailable`, with the reason in `error.description`.
+
+`usage.get()` reports the forms of the key's workspace under
+`signupForms`: `forms` against the per-workspace cap, `pendingSignups`
+waiting for their confirmation click, `confirmedLast30Days` (signups that
+became subscribed contacts) and `underAttack`, the forms held to a trickle
+right now, every signup double opt-in.
 
 ## Configuration
 
@@ -218,15 +291,16 @@ Constructing without any key throws; nothing else ever does.
 
 ## Coverage
 
-v0 wraps the transactional surface: `emails`, `templates`, `suppressions`,
-`usage`. The remaining API resources (contacts, tags, sequences, sending
-domains, analytics) arrive as minor releases; until then they are one
+v0 wraps the transactional surface (`emails`, `templates`, `suppressions`,
+`usage`) and signups through `forms`. The remaining API resources
+(contacts, tags, sequences, sending domains, analytics) arrive as minor
+releases; until then they are one
 [documented HTTP call](https://sendheron.com/docs) away.
 
 ## Requirements
 
-Node.js >= 20 (native `fetch`, ES2022 output). CI exercises Node 22 and 24,
-the maintained lines. Zero runtime dependencies. Ships ESM and CJS with full
+Node.js >= 20 (native `fetch`, ES2022 output). CI exercises Node 22, 24 and
+26, the maintained lines. Zero runtime dependencies. Ships ESM and CJS with full
 type declarations.
 
 ## Contract drift protection

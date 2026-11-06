@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.11.0
+
+Additive: every field that existed keeps its shape, and every call that
+worked before works the same way.
+
+From 2026-11-05 the API takes signups through a signup form from your own
+server, under a new API key scope:
+
+- `forms.signup(formId, payload)` calls
+  `POST /api/v1/forms/{formId}/signups` with `{ email, ipAddress }`, plus
+  `firstName`, `lastName` and `userAgent` when you have them, and resolves
+  to `{ status: 'accepted' }` (a `202`). The answer is the same for every
+  address, so it tells nobody whether an address is subscribed. Call it
+  from your server, never the browser: the key is a secret. The signup is
+  always double opt-in, whatever the form's own setting: the person joins
+  the form's list only once they confirm.
+- `ipAddress` must be the visitor's real address: behind Cloudflare the
+  `CF-Connecting-IP` header, never an `X-Forwarded-For` value the visitor
+  can write. It is kept on the consent record and counted toward the
+  per-visitor limit.
+- Limits: 30 a minute per key, hourly and daily ceilings per key, and a
+  per-visitor limit on the IP address you report, each a `429` with
+  `Retry-After`. Refusals: `400` `signupForms.invalidEmail`,
+  `signupForms.undeliverableEmail` or `signupForms.fieldRequired`, `404`
+  `signupForms.notFound`, and `409` `signupForms.unavailable` when the form
+  takes no signups, with the reason in `error.description`.
+- The route needs the new `signups:create` scope. A key that holds only
+  that scope can do nothing else, so give your website's server code that
+  key.
+- New exports: the `FormSignupPayload` and `FormSignupAccepted` types.
+
+From 2026-11-06 `usage.get()` gains `signupForms`, never null. It is the
+one workspace-scoped block, since forms and their cap are per workspace:
+`forms` (`used`, `cap`, `remaining`; the cap is the same on every plan, so
+neither is null here), `pendingSignups` waiting for their confirmation
+click, `confirmedLast30Days` (signups that became subscribed contacts) and
+`underAttack` (forms held to a trickle right now, every signup double
+opt-in). It is exported as the `SignupFormsUsage` type.
+
+`spec/openapi.json` now includes the route, the scope and the new usage
+description. No suppression or hold reason was added.
+
+The package is now built with tsup 9 and TypeScript 6. Its JavaScript is
+byte-identical to a build with the previous toolchain. The type declarations
+end in an `export type { ... }` list instead of inline `type` markers: the
+same names, meaning the same thing.
+
 ## 0.10.0
 
 Nothing in the SDK changed: every type and every call is what 0.9.0
