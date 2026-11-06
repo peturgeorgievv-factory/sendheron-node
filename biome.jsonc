@@ -1,7 +1,17 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
   "files": {
-    "includes": ["**", "!dist", "!spec", "!pnpm-lock.yaml"]
+    // Biome 2.6 also formats Markdown and YAML. Kept out: the README's
+    // aligned code comments are deliberate, and workflows are hand-edited.
+    "includes": [
+      "**",
+      "!dist",
+      "!spec",
+      "!pnpm-lock.yaml",
+      "!**/*.md",
+      "!**/*.yaml",
+      "!**/*.yml"
+    ]
   },
   "formatter": {
     "enabled": true,

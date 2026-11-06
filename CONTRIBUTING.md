@@ -2,8 +2,8 @@
 
 ## Setup
 
-Node >= 22.13 (the toolchain; the shipped package supports Node >= 20) and
-pnpm 11 via corepack:
+Node 22.18+, 24.11+ or 26+ (the toolchain, set by tsup 9; the shipped
+package supports Node >= 20) and pnpm 11 via corepack:
 
 ```bash
 corepack enable

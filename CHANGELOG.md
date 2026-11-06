@@ -42,6 +42,11 @@ opt-in). It is exported as the `SignupFormsUsage` type.
 `spec/openapi.json` now includes the route, the scope and the new usage
 description. No suppression or hold reason was added.
 
+The package is now built with tsup 9 and TypeScript 6. Its JavaScript is
+byte-identical to a build with the previous toolchain. The type declarations
+end in an `export type { ... }` list instead of inline `type` markers: the
+same names, meaning the same thing.
+
 ## 0.10.0
 
 Nothing in the SDK changed: every type and every call is what 0.9.0

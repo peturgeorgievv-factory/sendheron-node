@@ -299,8 +299,8 @@ releases; until then they are one
 
 ## Requirements
 
-Node.js >= 20 (native `fetch`, ES2022 output). CI exercises Node 22 and 24,
-the maintained lines. Zero runtime dependencies. Ships ESM and CJS with full
+Node.js >= 20 (native `fetch`, ES2022 output). CI exercises Node 22, 24 and
+26, the maintained lines. Zero runtime dependencies. Ships ESM and CJS with full
 type declarations.
 
 ## Contract drift protection
