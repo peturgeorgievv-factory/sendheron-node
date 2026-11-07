@@ -40,10 +40,8 @@ type WithoutSendAt = { sendAt?: undefined };
  * - `error.statusCode === 422`     → `emailSending.providerRejected`: the
  *                                    provider refused the message itself.
  *                                    `error.description` is its reason as
- *                                    it worded it, such as
- *                                    `Illegal filename 'setup.exe'.`, or
- *                                    its error name when it gave none.
- *                                    Final: never retry it.
+ *                                    it worded it, or its error name when
+ *                                    it gave none. Final: never retry it.
  * - `error.statusCode === 409`     → `idempotency.requestInProgress`: the
  *                                    request with this key is still
  *                                    running, and its outcome is unknown.

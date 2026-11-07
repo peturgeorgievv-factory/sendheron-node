@@ -733,8 +733,9 @@ describe('retries', () => {
           statusCode: 422,
           message: 'emailSending.providerRejected',
           error: 'UNPROCESSABLE_ENTITY',
-          // SES's own words for an .exe attachment, passed through as is.
-          description: "Illegal filename 'setup.exe'.",
+          // SES's own words, passed through as is.
+          description:
+            'Email address is not verified. The following identities failed the check in region EU-CENTRAL-1: shop@example.com',
         },
       },
       { status: 201, body: sentRecord },
@@ -749,7 +750,9 @@ describe('retries', () => {
     expect(server.requests).toHaveLength(1);
     expect(error!.statusCode).toBe(422);
     expect(error!.code).toBe('emailSending.providerRejected');
-    expect(error!.description).toBe("Illegal filename 'setup.exe'.");
+    expect(error!.description).toBe(
+      'Email address is not verified. The following identities failed the check in region EU-CENTRAL-1: shop@example.com',
+    );
     expect(error!.retryable).toBe(false);
   });
 });

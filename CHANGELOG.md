@@ -2,23 +2,27 @@
 
 ## 0.12.1
 
-Nothing changes in the SDK's behavior or types: a `422` is still final,
-never retried, and `error.retryable` is false for it.
+Nothing changes in the SDK's behavior or types. Two API changes on the send
+routes (`emails.send()` and `emails.sendTemplate()`), from 2026-11-07:
 
-From 2026-11-07 the send routes (`emails.send()` and
-`emails.sendTemplate()`) say why the provider refused a message. On a `422`
-`emailSending.providerRejected`, `error.description` is the provider's
-reason as it worded it, such as `Illegal filename 'setup.exe'.`, SES's
-answer to an `.exe` attachment. It used to be the provider's error name
-(`MessageRejected`, `BadRequestException`), which never said what to
-change. Control characters become spaces, AWS resource names read `[arn]`,
-and it is at most 500 characters. Only when the provider gave no wording is
-it still the error name. The failed send record keeps the same reason in
-`errorMessage`, where it read `emailSending.providerRejected`.
+- A `422` `emailSending.providerRejected` says why the provider refused the
+  message. `error.description` is the provider's reason as it worded it,
+  where it used to be the provider's error name (`MessageRejected`,
+  `BadRequestException`), which never said what to change. Control
+  characters become spaces, AWS resource names read `[arn]` and the
+  sending account's number `[account]`, and it is at most 500 characters.
+  Only when the provider gave no wording is it still the error name. The
+  failed send record keeps the same reason in `errorMessage`, where it read
+  `emailSending.providerRejected`. A `422` is still final: never retried,
+  and `error.retryable` is false.
+- An attachment whose file name ends in an extension SES refuses (`.exe`,
+  `.bat`, `.js`, `.msi` and the rest of SES's list) is answered with a
+  `400` `emailSending.attachmentTypeNotAllowed`, the error a disallowed
+  content type gets, before anything is sent or recorded. It used to reach
+  SES and come back as a `422`. `error.retryable` is false.
 
-The README's Errors table and the `Emails` doc comment say so, the tests use
-a realistic reason, and `spec/openapi.json` carries the API's new `422`
-descriptions and its "Send outcomes" paragraph.
+The README and the `Emails` doc comment say so, the tests use a realistic
+reason, and `spec/openapi.json` carries the API's new descriptions.
 
 ## 0.12.0
 
