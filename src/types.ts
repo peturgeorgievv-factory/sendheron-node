@@ -169,9 +169,11 @@ export interface EmailSendRecord {
   status: EmailSendStatus;
   /**
    * When `status` is `suppressed`: a SendBlockReason value.
-   * When `failed`/`bounced`: diagnostics, usually the provider's. A send
-   * with attachments that could not wait (503 `emailSending.sendHeld`)
-   * records the SendHoldReason here.
+   * When `failed`/`bounced`: what went wrong, in SendHeron's own words: a
+   * sentence, or a key such as `emailSending.sendFailed`. A bounce gets a
+   * sentence for its kind, not the receiving server's text. A send with
+   * attachments that could not wait (503 `emailSending.sendHeld`) records
+   * the SendHoldReason here.
    */
   errorMessage?: string | null;
   /**

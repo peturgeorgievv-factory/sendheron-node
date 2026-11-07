@@ -39,9 +39,11 @@ type WithoutSendAt = { sendAt?: undefined };
  *                                    here when it is 30 s or less).
  * - `error.statusCode === 422`     → `emailSending.providerRejected`: the
  *                                    provider refused the message itself.
- *                                    `error.description` is its reason as
- *                                    it worded it, or its error name when
- *                                    it gave none. Final: never retry it.
+ *                                    `error.description` says in
+ *                                    SendHeron's words what was refused:
+ *                                    the sender, a recipient address, a
+ *                                    header, an attachment or the size.
+ *                                    Final: never retry it.
  * - `error.statusCode === 409`     → `idempotency.requestInProgress`: the
  *                                    request with this key is still
  *                                    running, and its outcome is unknown.

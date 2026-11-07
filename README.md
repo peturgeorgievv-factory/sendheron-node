@@ -191,7 +191,8 @@ On the send routes:
 | 400 | such as `emailSending.tooManyRecipients`, `emailSending.invalidHeaderValue` | The request is wrong: over 50 recipients in total, `to` included, or a header SES would refuse. Nothing was recorded. | false |
 | 409 | `idempotency.requestInProgress` | The request with this key is still running, so its outcome is not known yet. | true |
 | 409 | `idempotency.keyReusedWithDifferentPayload` | The key was already used for a different request. | false |
-| 422 | `emailSending.providerRejected` | The provider refused the message itself. `error.description` is its reason as it worded it, or its error name when it gave none. The failed attempt is recorded. | false |
+| 413 | `requestTooLarge` | The request body is over 15 MB, the most the email routes take. Nothing was recorded. | false |
+| 422 | `emailSending.providerRejected` | The provider refused the message itself. `error.description` says in SendHeron's words what was refused: the sender, a recipient address, a header, an attachment or the size. The failed attempt is recorded. | false |
 | 429 | `rate_limited` | Rate limited. The request was never processed. | true |
 | 503 | `emailSending.sendFailed` | The provider could not take the send now. The failed attempt is recorded. `retryAfterSeconds` is 30, or 300 when the sending account itself cannot send. | true |
 | 503 | `emailSending.sendHeld` | A send with attachments would have had to wait. `retryAfterSeconds` is when the hold lifts. | true |

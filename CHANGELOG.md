@@ -2,27 +2,38 @@
 
 ## 0.12.1
 
-Nothing changes in the SDK's behavior or types. Two API changes on the send
-routes (`emails.send()` and `emails.sendTemplate()`), from 2026-11-07:
+Nothing changes in the SDK's behavior or types. API changes from
+2026-11-07:
 
-- A `422` `emailSending.providerRejected` says why the provider refused the
-  message. `error.description` is the provider's reason as it worded it,
-  where it used to be the provider's error name (`MessageRejected`,
-  `BadRequestException`), which never said what to change. Control
-  characters become spaces, AWS resource names read `[arn]` and the
-  sending account's number `[account]`, and it is at most 500 characters.
-  Only when the provider gave no wording is it still the error name. The
-  failed send record keeps the same reason in `errorMessage`, where it read
-  `emailSending.providerRejected`. A `422` is still final: never retried,
-  and `error.retryable` is false.
+- A `422` `emailSending.providerRejected` from `emails.send()` or
+  `emails.sendTemplate()` says in SendHeron's words what was refused.
+  `error.description` names the sender, a recipient address, a header, an
+  attachment or the size, or says the message cannot be sent as it is,
+  where it carried the provider's error name or wording. The failed send
+  record keeps the same sentence in `errorMessage`. A `422` is still final:
+  never retried, and `error.retryable` is false.
 - An attachment whose file name ends in an extension SES refuses (`.exe`,
-  `.bat`, `.js`, `.msi` and the rest of SES's list) is answered with a
-  `400` `emailSending.attachmentTypeNotAllowed`, the error a disallowed
-  content type gets, before anything is sent or recorded. It used to reach
-  SES and come back as a `422`. `error.retryable` is false.
+  `.bat`, `.js`, `.msi` and the rest of SES's list, in any case) is
+  answered with a `400` `emailSending.attachmentTypeNotAllowed`, the error a
+  disallowed content type gets, before anything is sent or recorded. It
+  used to reach SES and come back as a `422`. `error.retryable` is false.
+- A request body over a route's limit is a `413` `requestTooLarge`, and
+  `error.retryable` is false. The email routes take up to 15 MB.
+- Error text is always SendHeron's own: nothing the email provider, a
+  receiving mail server, the database or the framework wrote reaches
+  `error.code` or `error.description`, nor the `errorMessage` of a send
+  record written from then on. A `failed` record holds SendHeron's sentence
+  or a key such as `emailSending.sendFailed`, and a `bounced` one a
+  sentence for the kind of bounce where it held the receiving server's
+  diagnostic. A send SES refused from its own suppression list is
+  `suppressed` with `HARD_SUPPRESSED`. An error SendHeron did not raise
+  carries only its status and a key such as `badRequest` or
+  `internalServerError`, and a NUL byte in a field is a `400` `badRequest`
+  where it was a `500`.
 
-The README and the `Emails` doc comment say so, the tests use a realistic
-reason, and `spec/openapi.json` carries the API's new descriptions.
+The README and the doc comments say so, the tests use SendHeron's wording
+and pin `retryable` for a `413`, and `spec/openapi.json` carries the API's
+new descriptions.
 
 ## 0.12.0
 
