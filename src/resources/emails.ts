@@ -38,8 +38,11 @@ type WithoutSendAt = { sendAt?: undefined };
  *                                    `error.retryAfterSeconds` (waited out
  *                                    here when it is 30 s or less).
  * - `error.statusCode === 422`     → `emailSending.providerRejected`: the
- *                                    provider refused the message itself,
- *                                    its error name in `error.description`.
+ *                                    provider refused the message itself.
+ *                                    `error.description` is its reason as
+ *                                    it worded it, such as
+ *                                    `Illegal filename 'setup.exe'.`, or
+ *                                    its error name when it gave none.
  *                                    Final: never retry it.
  * - `error.statusCode === 409`     → `idempotency.requestInProgress`: the
  *                                    request with this key is still

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.1
+
+Nothing changes in the SDK's behavior or types: a `422` is still final,
+never retried, and `error.retryable` is false for it.
+
+From 2026-11-07 the send routes (`emails.send()` and
+`emails.sendTemplate()`) say why the provider refused a message. On a `422`
+`emailSending.providerRejected`, `error.description` is the provider's
+reason as it worded it, such as `Illegal filename 'setup.exe'.`, SES's
+answer to an `.exe` attachment. It used to be the provider's error name
+(`MessageRejected`, `BadRequestException`), which never said what to
+change. Control characters become spaces, AWS resource names read `[arn]`,
+and it is at most 500 characters. Only when the provider gave no wording is
+it still the error name. The failed send record keeps the same reason in
+`errorMessage`, where it read `emailSending.providerRejected`.
+
+The README's Errors table and the `Emails` doc comment say so, the tests use
+a realistic reason, and `spec/openapi.json` carries the API's new `422`
+descriptions and its "Send outcomes" paragraph.
+
 ## 0.12.0
 
 Every field that existed keeps its shape. Two behaviors change, both to
