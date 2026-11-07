@@ -10,6 +10,14 @@ import type {
 export class Suppressions {
   constructor(private readonly client: HttpClient) {}
 
+  /**
+   * The addresses SendHeron refuses to send to from this key's workspace,
+   * with reason, source and timestamp: the workspace's own opt-outs, and
+   * the organization's bounces and complaints for addresses the workspace
+   * has as contacts or has sent to. `tier: 'HARD'` (bounce, complaint)
+   * blocks every stream, transactional included; `'CONSENT'` blocks
+   * marketing only.
+   */
   list(
     params?: ListSuppressionsParams,
     options?: RequestOptions,
@@ -49,8 +57,13 @@ export class Suppressions {
   }
 
   /**
-   * Lift one address. Lifting a bounce/complaint (hard tier) requires
-   * `confirmHardTier: true`: it also clears the provider-side lists.
+   * Lift one address. When it bounced or complained (hard tier), that is
+   * what this lifts. A bounce or complaint reaches every workspace of the
+   * organization, so lifting one takes `confirmHardTier: true` and a key
+   * the account's owner created: a key anyone else created gets a 403
+   * `compliance.organizationWideSuppressionOwnerOnly`. It also clears the
+   * provider-side lists. An address with only an opt-out of the key's own
+   * workspace lifts with any key.
    */
   remove(
     email: string,

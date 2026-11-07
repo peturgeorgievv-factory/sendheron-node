@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.12.2
+
+Nothing changes in the SDK's behavior or types. API changes from
+2026-11-07:
+
+- `suppressions.list()` returns the key's workspace's view: its own
+  opt-outs, and the organization's bounces and complaints for addresses
+  the workspace has as contacts or has sent to. It used to return every
+  bounce and complaint in the organization. The CSV export
+  (`GET /api/v1/suppressions/export`, which the SDK does not wrap) returns
+  the same view.
+- `suppressions.remove()` lifts a bounce or complaint, which reaches every
+  workspace of the organization, only with a key the account's owner
+  created. A key anyone else created gets a `403`
+  `compliance.organizationWideSuppressionOwnerOnly`, and `error.retryable`
+  is false. An address with only an opt-out of the key's own workspace
+  lifts with any key, as before.
+- Adding a sending domain (`POST /api/v1/sending/domains`, which the SDK
+  does not wrap) returns the ownership challenge record to a key created
+  by anyone but the account's owner, even when another workspace of the
+  organization has verified the domain. Only a key the owner created still
+  skips the challenge then. The response shape is unchanged.
+
+The README and the doc comments say so, the tests pin `retryable` for the
+`403`, and `spec/openapi.json` carries the API's new descriptions and the
+`403`.
+
 ## 0.12.1
 
 Nothing changes in the SDK's behavior or types. API changes from
