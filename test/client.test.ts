@@ -733,7 +733,8 @@ describe('retries', () => {
           statusCode: 422,
           message: 'emailSending.providerRejected',
           error: 'UNPROCESSABLE_ENTITY',
-          description: 'MessageRejected',
+          // SendHeron's sentence for what was refused, never SES's wording.
+          description: 'A header in the message was refused.',
         },
       },
       { status: 201, body: sentRecord },
@@ -748,7 +749,7 @@ describe('retries', () => {
     expect(server.requests).toHaveLength(1);
     expect(error!.statusCode).toBe(422);
     expect(error!.code).toBe('emailSending.providerRejected');
-    expect(error!.description).toBe('MessageRejected');
+    expect(error!.description).toBe('A header in the message was refused.');
     expect(error!.retryable).toBe(false);
   });
 });

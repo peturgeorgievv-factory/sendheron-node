@@ -38,8 +38,11 @@ type WithoutSendAt = { sendAt?: undefined };
  *                                    `error.retryAfterSeconds` (waited out
  *                                    here when it is 30 s or less).
  * - `error.statusCode === 422`     → `emailSending.providerRejected`: the
- *                                    provider refused the message itself,
- *                                    its error name in `error.description`.
+ *                                    provider refused the message itself.
+ *                                    `error.description` says in
+ *                                    SendHeron's words what was refused:
+ *                                    the sender, a recipient address, a
+ *                                    header, an attachment or the size.
  *                                    Final: never retry it.
  * - `error.statusCode === 409`     → `idempotency.requestInProgress`: the
  *                                    request with this key is still
