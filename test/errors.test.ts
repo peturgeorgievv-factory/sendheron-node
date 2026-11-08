@@ -13,6 +13,9 @@ describe('error.retryable', () => {
     [null, 'network_error', true],
     [null, 'aborted', false],
     [400, 'emailSending.tooManyRecipients', false],
+    // A bounce or complaint blocks every workspace: no key lifts one, the
+    // account owner does, in the dashboard.
+    [403, 'compliance.organizationWideSuppressionOwnerOnly', false],
     // Still running when the client gave up: its outcome is unknown.
     [409, 'idempotency.requestInProgress', true],
     [409, 'idempotency.keyReusedWithDifferentPayload', false],

@@ -226,9 +226,16 @@ sendheron.templates.validate(document, previewText)    // previewText is optiona
 sendheron.suppressions.check('user@example.com') // per-stream recipient and
                                                  // organization verdict, with
                                                  // the address screening
-sendheron.suppressions.list({ tier: 'HARD' })
+sendheron.suppressions.list({ tier: 'HARD' })    // this workspace's opt-outs, and
+                                                 // the organization's bounces and
+                                                 // complaints for its contacts and
+                                                 // past recipients
 sendheron.suppressions.add({ email, note })
-sendheron.suppressions.remove(email, { confirmHardTier: true })
+sendheron.suppressions.remove(email, { note })   // Lifts this workspace's own
+                                                 // opt-outs. A bounce or complaint
+                                                 // is lifted by the account owner
+                                                 // in the dashboard, not through
+                                                 // the API.
 
 // Usage
 sendheron.usage.get() // pool position, plan caps, daily sending, signup
