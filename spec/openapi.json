@@ -2790,7 +2790,7 @@
     },
     "/api/v1/suppressions/{email}": {
       "delete": {
-        "description": "One address per call by design — a bulk form would let a single mistake resurrect an entire bounced list and burn the sending domain. Lifting a bounce or complaint requires confirmHardTier and a key created by the account's owner.",
+        "description": "One address per call by design: a bulk form would let a single mistake resurrect an entire bounced list and burn the sending domain. Only this workspace's own opt-outs can be lifted here. A bounce or complaint blocks every workspace of the account and is lifted by the account owner in the dashboard, never through the API.",
         "operationId": "SuppressionsController_unsuppressEmail",
         "parameters": [
           {
@@ -2817,11 +2817,8 @@
           "200": {
             "description": "Suppression lifted"
           },
-          "400": {
-            "description": "Hard-tier suppression requires confirmHardTier"
-          },
           "403": {
-            "description": "A bounce or complaint reaches every workspace: only a key created by the account's owner lifts one"
+            "description": "A bounce or complaint blocks every workspace of the account; the account owner lifts it in the dashboard"
           },
           "404": {
             "description": "Address is not suppressed"
@@ -2862,7 +2859,7 @@
         ]
       },
       "post": {
-        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, an ownership challenge TXT record and, when the mail subdomain is free, the MAIL FROM MX and SPF records. Publish them, then call verify. The challenge is omitted in one case only: the key was created by the account owner and this organization has already verified the same domain in another workspace. The domain is then authenticated immediately and needs no DNS at all. Any other key is issued the challenge for such a domain too, because another workspace's proof counts only for the owner.",
+        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, an ownership challenge TXT record and, when the mail subdomain is free, the MAIL FROM MX and SPF records. Publish them, then call verify. Every domain added through the API proves ownership with its own challenge, even one this account has already verified in another workspace: relying on another workspace's proof is the account owner's call, made in the dashboard.",
         "operationId": "SendingDomainsController_addDomain",
         "parameters": [],
         "requestBody": {
@@ -2967,7 +2964,7 @@
     },
     "/api/v1/sending/identities": {
       "get": {
-        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated here), DOMAIN_VERIFIED_ELSEWHERE (this organization authenticated it in another workspace, so adding it here needs no DNS; answered only to a key the account owner created, since only the owner may rely on another workspace's proof), DOMAIN_PENDING (added here, not verified yet), or DOMAIN_UNVERIFIED (not authenticated here, nor anywhere this key may rely on).",
+        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated in this workspace), DOMAIN_PENDING (added here, not verified yet), or DOMAIN_UNVERIFIED (not authenticated here). A domain another workspace of the account verified counts as unverified here: relying on another workspace's proof is the account owner's call, made in the dashboard, and no key reaches beyond its workspace.",
         "operationId": "SenderIdentitiesController_listIdentities",
         "parameters": [],
         "responses": {
@@ -3007,7 +3004,7 @@
             "description": "The created identity"
           },
           "400": {
-            "description": "emailConfig.domainNotInWorkspace: the address is on a domain this workspace has not added and that this key cannot adopt from another workspace (only a key the account owner created can). Add the domain first; a pending domain is accepted."
+            "description": "emailConfig.domainNotInWorkspace: the address is on a domain this workspace has not added. Add the domain first; a pending domain is accepted. A domain verified in another workspace of the account counts as not added here."
           }
         },
         "security": [
@@ -3051,7 +3048,7 @@
             "description": "The updated identity"
           },
           "400": {
-            "description": "emailConfig.domainNotInWorkspace: the new address is on a domain this workspace has not added and that this key cannot adopt from another workspace (only a key the account owner created can)."
+            "description": "emailConfig.domainNotInWorkspace: the new address is on a domain this workspace has not added. A domain verified in another workspace of the account counts as not added here."
           },
           "404": {
             "description": "No such identity in this workspace"
@@ -4344,10 +4341,6 @@
       "UnsuppressEmailRestDto": {
         "type": "object",
         "properties": {
-          "confirmHardTier": {
-            "type": "boolean",
-            "description": "Required to lift a bounce or complaint suppression. Those are deliverability facts, not preferences — re-mailing the address risks the sending domain, so it takes a deliberate acknowledgement."
-          },
           "note": {
             "type": "string",
             "description": "Why this suppression is being lifted."
