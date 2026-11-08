@@ -310,7 +310,7 @@ let sendId;
   );
 }
 
-// manual suppression round trip (consent tier: no confirmHardTier needed)
+// manual suppression round trip (an opt-out of this workspace, which any key lifts)
 {
   const address = 'sdk-e2e-suppress@example.com';
   const { error: addError } = await sdk.suppressions.add({

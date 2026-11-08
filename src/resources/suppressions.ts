@@ -57,17 +57,16 @@ export class Suppressions {
   }
 
   /**
-   * Lift one address. When it bounced or complained (hard tier), that is
-   * what this lifts. A bounce or complaint reaches every workspace of the
-   * organization, so lifting one takes `confirmHardTier: true` and a key
-   * the account's owner created: a key anyone else created gets a 403
-   * `compliance.organizationWideSuppressionOwnerOnly`. It also clears the
-   * provider-side lists. An address with only an opt-out of the key's own
-   * workspace lifts with any key.
+   * Lifts this workspace's own opt-outs of one address. A bounce or
+   * complaint is lifted by the account owner in the dashboard, not through
+   * the API: it blocks every workspace of the account, so an address that
+   * bounced or complained gets a 403
+   * `compliance.organizationWideSuppressionOwnerOnly` whatever the key, even
+   * when it also has an opt-out of this workspace. `note` says why.
    */
   remove(
     email: string,
-    body?: { confirmHardTier?: boolean; note?: string },
+    body?: { note?: string },
     options?: RequestOptions,
   ): Promise<Result<unknown>> {
     return this.client.delete(

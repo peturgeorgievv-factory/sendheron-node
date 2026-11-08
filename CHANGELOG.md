@@ -1,9 +1,15 @@
 # Changelog
 
-## 0.12.2
+## 0.13.0
 
-Nothing changes in the SDK's behavior or types. API changes from
-2026-11-08:
+Suppressions per workspace (backend #174). Breaking: `confirmHardTier`
+removed from the unsuppress request; a bounce or complaint suppression is
+lifted in the dashboard only, and a key never reaches beyond its workspace
+(backend #176).
+
+To upgrade, drop `confirmHardTier` from `suppressions.remove()` calls: the
+type no longer has it, and the API ignores it. Nothing else in the SDK's
+behavior or types changes. API changes from 2026-11-08:
 
 - `suppressions.list()` returns the key's workspace's view: its own
   opt-outs, and the organization's bounces and complaints for addresses
@@ -11,27 +17,28 @@ Nothing changes in the SDK's behavior or types. API changes from
   bounce and complaint in the organization. The CSV export
   (`GET /api/v1/suppressions/export`, which the SDK does not wrap) returns
   the same view.
-- `suppressions.remove()` lifts a bounce or complaint, which reaches every
-  workspace of the organization, only with a key the account's owner
-  created. A key anyone else created gets a `403`
-  `compliance.organizationWideSuppressionOwnerOnly`, and `error.retryable`
-  is false. An address with only an opt-out of the key's own workspace
-  lifts with any key, as before.
+- `suppressions.remove()` lifts this workspace's own opt-outs. A bounce or
+  complaint blocks every workspace of the account and is lifted by the
+  account owner in the dashboard, not through the API. It used to lift
+  one with `confirmHardTier: true`. Now an address that bounced or
+  complained gets a `403` `compliance.organizationWideSuppressionOwnerOnly`
+  whatever the key, even when it also has an opt-out of this workspace,
+  and `error.retryable` is false. The `400`
+  `compliance.hardSuppressionRequiresConfirm` no longer happens.
 - Adding a sending domain (`POST /api/v1/sending/domains`, which the SDK
-  does not wrap) returns the ownership challenge record to a key created
-  by anyone but the account's owner, even when another workspace of the
-  organization has verified the domain. Only a key the owner created still
-  skips the challenge then. The response shape is unchanged.
+  does not wrap) returns the ownership challenge record for every domain,
+  even one another workspace of the account has verified. The response
+  shape is unchanged.
 - Sender identities (`/api/v1/sending/identities`, which the SDK does not
-  wrap) report `DOMAIN_VERIFIED_ELSEWHERE` only to a key the account's
-  owner created. A key anyone else created reads `DOMAIN_UNVERIFIED` for a
-  domain another workspace verified, and creating an identity on it, or
-  moving one to it, is refused with a `400`
+  wrap) report `sendability` as `SENDABLE`, `DOMAIN_PENDING` or
+  `DOMAIN_UNVERIFIED`, never `DOMAIN_VERIFIED_ELSEWHERE`. A domain another
+  workspace verified reads `DOMAIN_UNVERIFIED`, and creating an identity on
+  it, or moving one to it, is refused with a `400`
   `emailConfig.domainNotInWorkspace` until the workspace adds the domain.
 
 The README and the doc comments say so, the tests pin `retryable` for the
-`403`, and `spec/openapi.json` carries the API's new descriptions and the
-`403`.
+`403`, and `spec/openapi.json` carries the API's new descriptions, the
+`403`, and the unsuppress body without `confirmHardTier`.
 
 ## 0.12.1
 

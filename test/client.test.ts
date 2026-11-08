@@ -1135,10 +1135,10 @@ describe('request shaping', () => {
       '/api/v1/suppressions/check?email=a%2Bb%40c.co',
     );
 
-    await sdk.suppressions.remove('a+b@c.co', { confirmHardTier: true });
+    await sdk.suppressions.remove('a+b@c.co', { note: 'asked to rejoin' });
     expect(server.requests[1]!.url).toBe('/api/v1/suppressions/a%2Bb%40c.co');
     expect(JSON.parse(server.requests[1]!.body)).toEqual({
-      confirmHardTier: true,
+      note: 'asked to rejoin',
     });
   });
 

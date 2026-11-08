@@ -231,8 +231,11 @@ sendheron.suppressions.list({ tier: 'HARD' })    // this workspace's opt-outs, a
                                                  // complaints for its contacts and
                                                  // past recipients
 sendheron.suppressions.add({ email, note })
-sendheron.suppressions.remove(email, { confirmHardTier: true }) // a bounce or complaint:
-                                                                // owner-created keys only
+sendheron.suppressions.remove(email, { note })   // Lifts this workspace's own
+                                                 // opt-outs. A bounce or complaint
+                                                 // is lifted by the account owner
+                                                 // in the dashboard, not through
+                                                 // the API.
 
 // Usage
 sendheron.usage.get() // pool position, plan caps, daily sending, signup
