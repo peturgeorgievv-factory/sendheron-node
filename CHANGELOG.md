@@ -3,7 +3,7 @@
 ## 0.12.2
 
 Nothing changes in the SDK's behavior or types. API changes from
-2026-11-07:
+2026-11-08:
 
 - `suppressions.list()` returns the key's workspace's view: its own
   opt-outs, and the organization's bounces and complaints for addresses
@@ -22,6 +22,12 @@ Nothing changes in the SDK's behavior or types. API changes from
   by anyone but the account's owner, even when another workspace of the
   organization has verified the domain. Only a key the owner created still
   skips the challenge then. The response shape is unchanged.
+- Sender identities (`/api/v1/sending/identities`, which the SDK does not
+  wrap) report `DOMAIN_VERIFIED_ELSEWHERE` only to a key the account's
+  owner created. A key anyone else created reads `DOMAIN_UNVERIFIED` for a
+  domain another workspace verified, and creating an identity on it, or
+  moving one to it, is refused with a `400`
+  `emailConfig.domainNotInWorkspace` until the workspace adds the domain.
 
 The README and the doc comments say so, the tests pin `retryable` for the
 `403`, and `spec/openapi.json` carries the API's new descriptions and the

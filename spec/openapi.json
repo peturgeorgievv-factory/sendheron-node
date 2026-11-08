@@ -2609,7 +2609,7 @@
     },
     "/api/v1/suppressions": {
       "get": {
-        "description": "Every address the platform will refuse to send to, with reason, source and timestamp. Filterable by tier: HARD (bounce/complaint) blocks every channel including transactional; CONSENT blocks marketing only.",
+        "description": "Every address the platform will refuse to send to from this key's workspace, with reason, source and timestamp: the workspace's own opt-outs, and the organization's bounces and complaints for addresses the workspace has as contacts or has sent to. Filterable by tier: HARD (bounce/complaint) blocks every channel including transactional; CONSENT blocks marketing only.",
         "operationId": "SuppressionsController_listSuppressions",
         "parameters": [
           {
@@ -2769,7 +2769,7 @@
     },
     "/api/v1/suppressions/export": {
       "get": {
-        "description": "Pages through the list on a keyset cursor and returns this workspace's view: organization-wide bounces and complaints plus this workspace's opt-outs.",
+        "description": "Pages through the list on a keyset cursor and returns this workspace's view: its own opt-outs, and the organization's bounces and complaints for addresses the workspace has as contacts or has sent to.",
         "operationId": "SuppressionsController_exportSuppressions",
         "parameters": [],
         "responses": {
@@ -2790,7 +2790,7 @@
     },
     "/api/v1/suppressions/{email}": {
       "delete": {
-        "description": "One address per call by design — a bulk form would let a single mistake resurrect an entire bounced list and burn the sending domain. Lifting a bounce or complaint requires confirmHardTier.",
+        "description": "One address per call by design — a bulk form would let a single mistake resurrect an entire bounced list and burn the sending domain. Lifting a bounce or complaint requires confirmHardTier and a key created by the account's owner.",
         "operationId": "SuppressionsController_unsuppressEmail",
         "parameters": [
           {
@@ -2819,6 +2819,9 @@
           },
           "400": {
             "description": "Hard-tier suppression requires confirmHardTier"
+          },
+          "403": {
+            "description": "A bounce or complaint reaches every workspace: only a key created by the account's owner lifts one"
           },
           "404": {
             "description": "Address is not suppressed"
@@ -2859,7 +2862,7 @@
         ]
       },
       "post": {
-        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, an ownership challenge TXT record and, when the mail subdomain is free, the MAIL FROM MX and SPF records. Publish them, then call verify. The challenge is omitted only when this organization has already verified the same domain in another workspace, in which case the domain is authenticated immediately and needs no DNS at all.",
+        "description": "Returns the DNS records to publish: the provider DKIM records, an advisory DMARC record, an ownership challenge TXT record and, when the mail subdomain is free, the MAIL FROM MX and SPF records. Publish them, then call verify. The challenge is omitted in one case only: the key was created by the account owner and this organization has already verified the same domain in another workspace. The domain is then authenticated immediately and needs no DNS at all. Any other key is issued the challenge for such a domain too, because another workspace's proof counts only for the owner.",
         "operationId": "SendingDomainsController_addDomain",
         "parameters": [],
         "requestBody": {
@@ -2964,7 +2967,7 @@
     },
     "/api/v1/sending/identities": {
       "get": {
-        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated here), DOMAIN_VERIFIED_ELSEWHERE (this organization authenticated it in another workspace, so adding it here needs no DNS), DOMAIN_PENDING (added here, not verified yet), or DOMAIN_UNVERIFIED (nobody in this organization has authenticated it).",
+        "description": "Default first, then oldest first. Each entry carries `sendability`: SENDABLE (the domain is authenticated here), DOMAIN_VERIFIED_ELSEWHERE (this organization authenticated it in another workspace, so adding it here needs no DNS; answered only to a key the account owner created, since only the owner may rely on another workspace's proof), DOMAIN_PENDING (added here, not verified yet), or DOMAIN_UNVERIFIED (not authenticated here, nor anywhere this key may rely on).",
         "operationId": "SenderIdentitiesController_listIdentities",
         "parameters": [],
         "responses": {
@@ -3004,7 +3007,7 @@
             "description": "The created identity"
           },
           "400": {
-            "description": "emailConfig.domainNotInWorkspace: the address is on a domain this workspace has not added and no workspace of this organization has verified. Add the domain first; a pending domain is accepted."
+            "description": "emailConfig.domainNotInWorkspace: the address is on a domain this workspace has not added and that this key cannot adopt from another workspace (only a key the account owner created can). Add the domain first; a pending domain is accepted."
           }
         },
         "security": [
@@ -3048,7 +3051,7 @@
             "description": "The updated identity"
           },
           "400": {
-            "description": "emailConfig.domainNotInWorkspace: the new address is on a domain this workspace has not added and no workspace of this organization has verified."
+            "description": "emailConfig.domainNotInWorkspace: the new address is on a domain this workspace has not added and that this key cannot adopt from another workspace (only a key the account owner created can)."
           },
           "404": {
             "description": "No such identity in this workspace"
