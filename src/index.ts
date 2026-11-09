@@ -6,7 +6,13 @@ import { Templates } from './resources/templates.js';
 import { Usage } from './resources/usage.js';
 
 export type { ClientOptions, RequestOptions } from './client.js';
-export { type Result, SendHeronError } from './errors.js';
+export {
+  type Result,
+  SendHeronError,
+  TRANSPORT_ERROR_CODES,
+  type TransportErrorCode,
+} from './errors.js';
+export type * from './generated.js';
 export * from './types.js';
 export { VERSION } from './version.js';
 
@@ -25,7 +31,7 @@ export { VERSION } from './version.js';
  * });
  *
  * if (error) throw error;                      // 4xx/5xx after retries
- * if (data.status === 'suppressed') {
+ * if (data.status === 'SUPPRESSED') {
  *   // refused by the compliance gate: data.errorMessage says why. Never retry.
  * }
  * if (isHeld(data)) {

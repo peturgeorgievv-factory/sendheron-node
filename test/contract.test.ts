@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { VERSION } from '../src/version.js';
@@ -35,5 +36,16 @@ describe('contract pins', () => {
     for (const route of sdkRoutes) {
       expect(spec.paths, `missing route: ${route}`).toHaveProperty([route]);
     }
+  });
+
+  it('src/generated.ts is what the committed spec generates', () => {
+    // A spec refresh without `pnpm types:generate` fails here, so no build
+    // ships types the committed document does not declare.
+    const output = execFileSync(
+      process.execPath,
+      ['scripts/gen-types.mjs', '--check'],
+      { encoding: 'utf8', stdio: 'pipe' },
+    );
+    expect(output).toContain('matches');
   });
 });

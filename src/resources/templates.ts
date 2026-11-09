@@ -1,26 +1,29 @@
 import type { HttpClient, RequestOptions } from '../client.js';
 import type { Result } from '../errors.js';
 import type {
-  CreateTemplatePayload,
-  ListTemplatesParams,
-  PaginatedResult,
-  PreviewTemplatePayload,
-  Template,
-  TemplatePreview,
-  UpdateTemplatePayload,
-} from '../types.js';
+  CreateTemplateRequest,
+  DeletedResponse,
+  PaginatedResponse,
+  PreviewTemplateRequest,
+  TemplatePreviewResponse,
+  TemplateResponse,
+  TemplateValidationResponse,
+  UpdateTemplateRequest,
+} from '../generated.js';
+import type { ListTemplatesParams } from '../types.js';
 
 export class Templates {
   constructor(private readonly client: HttpClient) {}
 
+  /** One page of templates: `page` is zero-based, `limit` at most 100. */
   list(
     params?: ListTemplatesParams,
     options?: RequestOptions,
-  ): Promise<Result<PaginatedResult<Template>>> {
+  ): Promise<Result<PaginatedResponse<TemplateResponse>>> {
     return this.client.get('/api/v1/templates', { ...params }, options);
   }
 
-  get(id: string, options?: RequestOptions): Promise<Result<Template>> {
+  get(id: string, options?: RequestOptions): Promise<Result<TemplateResponse>> {
     return this.client.get(
       `/api/v1/templates/${encodeURIComponent(id)}`,
       undefined,
@@ -35,9 +38,9 @@ export class Templates {
    * characters it is a 400 `templates.previewTextTooLong`.
    */
   create(
-    payload: CreateTemplatePayload,
+    payload: CreateTemplateRequest,
     options?: RequestOptions,
-  ): Promise<Result<Template>> {
+  ): Promise<Result<TemplateResponse>> {
     return this.client.post('/api/v1/templates', payload, options);
   }
 
@@ -49,9 +52,9 @@ export class Templates {
    */
   update(
     id: string,
-    payload: UpdateTemplatePayload,
+    payload: UpdateTemplateRequest,
     options?: RequestOptions,
-  ): Promise<Result<Template>> {
+  ): Promise<Result<TemplateResponse>> {
     return this.client.patch(
       `/api/v1/templates/${encodeURIComponent(id)}`,
       payload,
@@ -59,11 +62,13 @@ export class Templates {
     );
   }
 
-  /** Resolves to the API's literal `true` on success. */
-  remove(id: string, options?: RequestOptions): Promise<Result<boolean>> {
+  /** Answers `{ deleted: true }`. */
+  remove(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<Result<DeletedResponse>> {
     return this.client.delete(
       `/api/v1/templates/${encodeURIComponent(id)}`,
-      undefined,
       options,
     );
   }
@@ -72,14 +77,14 @@ export class Templates {
    * Render unsaved content exactly as a send would: including the flags
    * that catch authoring hazards (`unsubscribeVariableIgnored`,
    * `hasUnrecognizedUnsubscribeLink`, `injectedUnsubscribeFooter`). Pass
-   * `subject` and `previewText` to see them rendered (`renderedSubject`,
-   * `renderedPreviewText`) and the preview text placed as the hidden
-   * preheader.
+   * `variables` for the merge tags, and `subject` and `previewText` to see
+   * them rendered (`renderedSubject`, `renderedPreviewText`) and the preview
+   * text placed as the hidden preheader.
    */
   preview(
-    payload: PreviewTemplatePayload,
+    payload: PreviewTemplateRequest,
     options?: RequestOptions,
-  ): Promise<Result<TemplatePreview>> {
+  ): Promise<Result<TemplatePreviewResponse>> {
     return this.client.post('/api/v1/templates/preview', payload, options);
   }
 
@@ -90,7 +95,7 @@ export class Templates {
   validate(
     document: Record<string, unknown>,
     options?: RequestOptions,
-  ): Promise<Result<{ valid: boolean; issues: string[] }>>;
+  ): Promise<Result<TemplateValidationResponse>>;
   /**
    * Check a block document with the preview text the template will carry.
    * Its hidden preheader is sent in the same body, so it counts toward the
@@ -101,12 +106,12 @@ export class Templates {
     document: Record<string, unknown>,
     previewText: string | null | undefined,
     options?: RequestOptions,
-  ): Promise<Result<{ valid: boolean; issues: string[] }>>;
+  ): Promise<Result<TemplateValidationResponse>>;
   validate(
     document: Record<string, unknown>,
     previewTextOrOptions?: string | null | RequestOptions,
     options?: RequestOptions,
-  ): Promise<Result<{ valid: boolean; issues: string[] }>> {
+  ): Promise<Result<TemplateValidationResponse>> {
     // The second argument was the request options before preview text
     // existed, and still is when it is an object.
     const isOptions =

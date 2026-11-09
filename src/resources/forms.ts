@@ -1,6 +1,9 @@
 import type { HttpClient, RequestOptions } from '../client.js';
 import type { Result } from '../errors.js';
-import type { FormSignupAccepted, FormSignupPayload } from '../types.js';
+import type {
+  CreateFormSignupRequest,
+  FormSignupAcceptedResponse,
+} from '../generated.js';
 
 export class Forms {
   constructor(private readonly client: HttpClient) {}
@@ -15,9 +18,9 @@ export class Forms {
    * the form's confirmation email and joins the form's list only once they
    * confirm.
    *
-   * The answer is the same `accepted` for every address, so it tells nobody
-   * whether an address is subscribed: show "check your inbox" and nothing
-   * more.
+   * The answer is the same `{ status: 'ACCEPTED' }` for every address, so it
+   * tells nobody whether an address is subscribed: show "check your inbox"
+   * and nothing more.
    *
    * `ipAddress` must be the visitor's real address: behind Cloudflare the
    * `CF-Connecting-IP` header, never an `X-Forwarded-For` value the visitor
@@ -36,9 +39,9 @@ export class Forms {
    */
   signup(
     formId: string,
-    payload: FormSignupPayload,
+    payload: CreateFormSignupRequest,
     options?: RequestOptions,
-  ): Promise<Result<FormSignupAccepted>> {
+  ): Promise<Result<FormSignupAcceptedResponse>> {
     return this.client.post(
       `/api/v1/forms/${encodeURIComponent(formId)}/signups`,
       payload,

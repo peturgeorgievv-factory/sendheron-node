@@ -21,7 +21,15 @@ const { data, error } = await sendheron.emails.sendTemplate({
 });
 
 if (error) throw error;
-console.log(data.id, data.status, data.providerMessageId);
+
+if (data.status === 'SUPPRESSED') {
+  // Refused by the compliance gate: data.errorMessage says why. Never retry.
+} else if (data.status === 'QUEUED') {
+  // Waiting for daily capacity or warm-up (data.holdReason): it goes out by
+  // itself on this record. Never retry.
+} else {
+  console.log(data.id, data.status, data.providerMessageId); // SENT
+}
 ```
 
 ## The one thing to know: a 201 is an outcome, not proof of dispatch
@@ -52,17 +60,21 @@ if (error) {
 }
 
 switch (data.status) {
-  case 'sent':
+  case 'SENT':
     // Accepted by the provider. Persist data.id (readable back via
     // emails.get) and data.providerMessageId. data.droppedRecipients
     // lists any cc or bcc the compliance gate refused: it went without them.
     break;
-  case 'suppressed':
+  case 'SUPPRESSED':
     // The compliance gate refused: data.errorMessage is a stable reason
     // (e.g. 'HARD_SUPPRESSED'). NEVER retry these; surface them.
     break;
 }
 ```
+
+Statuses are UPPER_SNAKE, like the API's other states and reasons:
+`QUEUED`, `SENT`, `DELIVERED`, `OPENED`, `CLICKED`, `BOUNCED`, `FAILED` and
+`SUPPRESSED`, plus `SCHEDULED` and `CANCELLED` for a send with `sendAt`.
 
 `SEND_BLOCK_REASONS` exports every suppression reason as a typed list, and
 `isSenderSideBlock(reason)` splits them: sender-side reasons
@@ -103,7 +115,7 @@ mailable.
 A send can also wait. Mail leaves through one shared sending account with a
 rolling 24-hour quota, and new senders warm up, so a send over a daily line,
 or to an address a warming organization has never mailed, can answer
-`status: 'queued'` with the reason in `holdReason` (`SEND_HOLD_REASONS`) and
+`status: 'QUEUED'` with the reason in `holdReason` (`SEND_HOLD_REASONS`) and
 the next attempt in `heldUntil`. That is waiting, not failing: it goes out
 by itself, on the same record, and `emails.get(id)` reads its outcome once
 it has gone. `isHeld(record)` tells you which case you have:
@@ -123,9 +135,15 @@ last mailed over a year ago, the first email to each goes out in checked
 slices of that import, even once the sender's own warm-up is over
 (`IMPORT_SAMPLE`). When a slice bounces or draws complaints past the line,
 the rest of that import waits until SendHeron has looked at it
-(`IMPORT_SAMPLE_FAILED`). Those sends carry the import's id in
-`contactImportId`, and they are held sends like any other: `isHeld` is
+(`IMPORT_SAMPLE_FAILED`). Those are held sends like any other: `isHeld` is
 true, and they go out by themselves.
+
+A send with `sendAt` (a `Date` or an ISO-8601 string) answers the same
+record with `status: 'SCHEDULED'` and `scheduledAt`. `emails.get(id)`
+reads it while it waits, and `emails.cancelScheduled(id)` cancels it until
+it fires: that answers `{ deleted: true }`, and the record then reads
+`CANCELLED`. Once it has fired, `emails.get(id)` answers the send record it
+became, under that record's own id.
 
 Attachments are never stored, so a send carrying them cannot wait: where it
 would, it answers `503` with `error.code` `emailSending.sendHeld` instead.
@@ -151,9 +169,11 @@ An attachment whose file name ends in an extension SES refuses (`.exe`,
   once with `retryAfterSeconds`, for your queue to reschedule. Two retries
   by default; `maxRetries: 0` disables them (per call too, via options),
   which suits code a person is waiting on.
-- Every email send gets an **idempotency key automatically** and reuses it
-  across the SDK's internal retries: a timeout can never double-send, even
-  if you have never heard of the header. A concurrent-duplicate `409
+- Every send (`emails.send`, `emails.sendTemplate`, `emails.sendBulk`) gets
+  an **idempotency key automatically** and reuses it across the SDK's
+  internal retries: a timeout can never double-send, even if you have never
+  heard of the header. The API honors the key on those three routes only,
+  so the SDK sends it nowhere else. A concurrent-duplicate `409
   requestInProgress` is also retried until the server replays the original
   response. If the original is still running when the retries run out, the
   `409` is `retryable`, since its outcome is not known yet: retry later
@@ -178,11 +198,20 @@ An attachment whose file name ends in an extension SES refuses (`.exe`,
 ## Errors
 
 An error is a `SendHeronError` with the HTTP `statusCode` (null when no
-answer arrived) and a stable `code`. `error.retryable` says whether the same
-request can still succeed. When it is true, send it again later with the
-same idempotency key (`error.idempotencyKey`: a fresh one could send
-twice), after `error.retryAfterSeconds` when that is set. When it is false,
-fail the job: the same request fails the same way.
+answer arrived) and a stable `code`. `error.kind` says whose code it is:
+`'api'` when the API refused, and `code` is its key; `'transport'` when no
+usable answer arrived, and `code` is one of the SDK's own
+(`TRANSPORT_ERROR_CODES`: `timeout`, `network_error`, `aborted`,
+`invalid_response`). `error.description` is the API's sentence when it gave
+one, and never the HTTP status name. Every refusal has the same body, a
+`429` included: `{ statusCode, message, error, description }`, with
+`message` as the `code`.
+
+`error.retryable` says whether the same request can still succeed. When it
+is true, send it again later with the same idempotency key
+(`error.idempotencyKey`: a fresh one could send twice), after
+`error.retryAfterSeconds` when that is set. When it is false, fail the job:
+the same request fails the same way.
 
 On the send routes:
 
@@ -193,14 +222,15 @@ On the send routes:
 | 409 | `idempotency.keyReusedWithDifferentPayload` | The key was already used for a different request. | false |
 | 413 | `requestTooLarge` | The request body is over 15 MB, the most the email routes take. Nothing was recorded. | false |
 | 422 | `emailSending.providerRejected` | The provider refused the message itself. `error.description` says in SendHeron's words what was refused: the sender, a recipient address, a header, an attachment or the size. The failed attempt is recorded. | false |
-| 429 | `rate_limited` | Rate limited. The request was never processed. | true |
+| 429 | `tooManyRequests` | Rate limited. The request was never processed. | true |
 | 503 | `emailSending.sendFailed` | The provider could not take the send now. The failed attempt is recorded. `retryAfterSeconds` is 30, or 300 when the sending account itself cannot send. | true |
 | 503 | `emailSending.sendHeld` | A send with attachments would have had to wait. `retryAfterSeconds` is when the hold lifts. | true |
 | null | `timeout`, `network_error` | No answer arrived, so the send may or may not have gone. | true |
 | null | `aborted` | Your `signal` aborted the call. | false |
+| any | `invalid_response` | An answer that was not the API's: an edge or proxy page, or an empty or cut-off body. | true for a 5xx |
 
-Any other 4xx (a bad key, a missing scope, an unknown template) is a
-request bug, never retryable.
+Any other 4xx (a bad key, a missing scope, an unknown template, a
+malformed id: `invalidUUID`) is a request bug, never retryable.
 
 ## Resources
 
@@ -211,15 +241,15 @@ sendheron.emails.sendTemplate(payload)      // templated; sendAt schedules it
 sendheron.emails.sendBulk(payload)          // marketing blast to contacts
 sendheron.emails.get(id)                    // read one send back: delivery
                                             // lifecycle, opens/clicks by people,
-                                            // a held send's outcome
-sendheron.emails.cancelScheduled(id)
+                                            // a held or scheduled send's outcome
+sendheron.emails.cancelScheduled(id)        // { deleted: true }; it reads CANCELLED
 
 // Templates
 sendheron.templates.list({ emailType: 'TRANSACTIONAL' })
 sendheron.templates.create({ ..., previewText, emailType: 'TRANSACTIONAL' }) // type is required
 sendheron.templates.update(id, { emailType: 'MARKETING', confirmEmailTypeChange: true })
 sendheron.templates.update(id, { previewText: null })  // null removes it
-sendheron.templates.preview({ bodyHtml, subject, previewText, emailType, sampleData })
+sendheron.templates.preview({ bodyHtml, subject, previewText, emailType, variables })
 sendheron.templates.validate(document, previewText)    // previewText is optional
 
 // Suppressions
@@ -231,7 +261,7 @@ sendheron.suppressions.list({ tier: 'HARD' })    // this workspace's opt-outs, a
                                                  // complaints for its contacts and
                                                  // past recipients
 sendheron.suppressions.add({ email, note })
-sendheron.suppressions.remove(email, { note })   // Lifts this workspace's own
+sendheron.suppressions.remove(email)             // Lifts this workspace's own
                                                  // opt-outs. A bounce or complaint
                                                  // is lifted by the account owner
                                                  // in the dashboard, not through
@@ -256,10 +286,23 @@ the body; it is never stored in `bodyHtml`, and template responses read it
 as a string or null. It takes merge tags, whitespace collapses to one line,
 and it is at most 200 characters, merge tags counted as written: longer is
 a 400 `templates.previewTextTooLong`, never truncated. `preview()` renders
-it with your `sampleData` into `renderedPreviewText`, beside
+it with your `variables` into `renderedPreviewText`, beside
 `renderedSubject`, and `validate(document, previewText)` counts its
 preheader toward the size limit, so a builder document at the edge of that
 limit can be refused once preview text is added.
+
+## Lists, deletes and types
+
+Every list answers one envelope, `{ data, totalCount, page, limit,
+hasNextPage }` (`PaginatedResponse<T>`): `page` is the zero-based page you
+asked for, counts are never null, and `limit` defaults to 50 and stops at
+100. Every delete answers `{ deleted: true }` and takes no body.
+
+Every request and response type is generated from the API document
+(`SendRecordResponse`, `TemplateResponse`, `SuppressionEntryResponse`,
+`SuppressionCheckResponse`, `UsageResponse` and the rest), so the SDK types
+exactly what the API declares: every response field is present, `null`
+when empty, never absent.
 
 ## Signup forms
 
@@ -314,7 +357,7 @@ export async function subscribe(_previous: string, formData: FormData) {
 }
 ```
 
-The answer is the same `{ status: 'accepted' }` for every address (new,
+The answer is the same `{ status: 'ACCEPTED' }` for every address (new,
 already waiting for its confirmation, already subscribed, or one SendHeron
 will not mail), so it cannot tell anyone whether an address is subscribed.
 Limits: 30 a minute per key, hourly and daily ceilings per key, and a
@@ -343,11 +386,13 @@ Constructing without any key throws; nothing else ever does.
 
 ## Coverage
 
-v0 wraps the transactional surface (`emails`, `templates`, `suppressions`,
+1.0 wraps the transactional surface (`emails`, `templates`, `suppressions`,
 `usage`) and signups through `forms`. The remaining API resources
-(contacts, tags, sequences, sending domains, analytics) arrive as minor
-releases; until then they are one
-[documented HTTP call](https://sendheron.com/docs) away.
+(contacts, lists, tags, sequences, sending domains and identities,
+analytics) arrive as minor releases; until then they are one
+[documented HTTP call](https://sendheron.com/docs) away. They follow the
+same contract: the list envelope, `{ deleted: true }` deletes, and bulk
+removals as `POST .../bulk-remove` answering `{ removedIds, notFoundIds }`.
 
 ## Requirements
 
@@ -359,7 +404,9 @@ type declarations.
 
 `spec/openapi.json` is a snapshot of the live API contract. CI re-fetches the
 (public) live document and fails when they differ, so an API change becomes a
-failing build here: never a surprise in your integration.
+failing build here: never a surprise in your integration. The SDK's types
+are generated from that snapshot, and a test fails when they no longer
+match it.
 
 ## License
 

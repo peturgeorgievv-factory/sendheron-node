@@ -10,7 +10,8 @@
  *   SENDHERON_E2E_ALLOW_LIVE set to 1 to allow api.sendheron.com
  *
  * Side effects are contained: one template is created and deleted, one
- * manual suppression is added and removed, and the only send goes to the
+ * manual suppression is added and removed, a send scheduled an hour ahead
+ * is cancelled at once, and the only send goes to the
  * SES mailbox simulator (or is refused by the compliance gate when the
  * workspace has no sender configured, or while the organization is still
  * under sender review, or is held for daily capacity or warm-up and goes
@@ -152,13 +153,13 @@ let templateId;
   );
 }
 
-// preview renders the subject and preview text with sampleData, and puts
+// preview renders the subject and preview text with variables, and puts
 // the preview text in the body as the hidden preheader
 {
   const { data, error } = await sdk.templates.preview({
     bodyHtml: '<p>Hi {{ name }}</p>',
     emailType: 'TRANSACTIONAL',
-    sampleData: { name: 'Ada' },
+    variables: { name: 'Ada' },
     subject: 'Hello {{ name }}',
     previewText: 'Your receipt, {{ name }}',
   });
@@ -216,10 +217,10 @@ let templateId;
   );
 }
 
-// a raw send resolves to an OUTCOME either way: sent (simulator sink) when
-// the workspace has a configured sender, suppressed when it does not, and
-// suppressed with SENDER_UNDER_REVIEW while the organization is unreviewed
-// (the simulator is not one of its own domains), or queued with a
+// a raw send resolves to an OUTCOME either way: SENT (simulator sink) when
+// the workspace has a configured sender, SUPPRESSED when it does not, and
+// SUPPRESSED with SENDER_UNDER_REVIEW while the organization is unreviewed
+// (the simulator is not one of its own domains), or QUEUED with a
 // holdReason when it waits for daily capacity or warm-up
 let sendId;
 {
@@ -231,11 +232,11 @@ let sendId;
   sendId = data?.id;
   const ok =
     !error &&
-    (data.status === 'sent'
+    (data.status === 'SENT'
       ? !!data.providerMessageId
-      : data.status === 'suppressed'
+      : data.status === 'SUPPRESSED'
         ? !!data.errorMessage
-        : data.status === 'queued' && !!data.holdReason && !!data.heldUntil);
+        : data.status === 'QUEUED' && !!data.holdReason && !!data.heldUntil);
   record(
     'send outcome',
     ok,
@@ -244,9 +245,8 @@ let sendId;
   );
 }
 
-// read the send back by id: every engagement counter is present, people
-// and machines apart, and so are the warm-up flag, the import slice and
-// the dropped copies (null: this send had none)
+// read the send back by id: every field is present, null when empty, the
+// engagement counters people and machines apart, and nothing internal
 {
   const { data, error } = await sdk.emails.get(sendId);
   record(
@@ -260,12 +260,39 @@ let sendId;
         'machineClickCount',
         'unconfirmedOpenCount',
       ].every((count) => typeof data[count] === 'number') &&
-      typeof data.warmupFirstContact === 'boolean' &&
-      (data.contactImportId === null ||
-        typeof data.contactImportId === 'string') &&
-      data.droppedRecipients === null,
+      data.channel === 'TRANSACTIONAL_API' &&
+      data.scheduledAt === null &&
+      data.droppedRecipients === null &&
+      !('organizationId' in data),
     error?.code ??
-      `droppedRecipients=${JSON.stringify(data?.droppedRecipients)}`,
+      `channel=${data?.channel} droppedRecipients=${JSON.stringify(data?.droppedRecipients)}`,
+  );
+}
+
+// a scheduled send is the same record, SCHEDULED; get() reads it, and
+// cancelling it answers { deleted: true } and leaves it CANCELLED
+{
+  const sendAt = new Date(Date.now() + 60 * 60 * 1000);
+  const { data, error } = await sdk.emails.send({
+    to: SIMULATOR_SUCCESS,
+    subject: 'sdk e2e scheduled',
+    html: '<p>e2e probe, cancelled before it fires</p>',
+    sendAt,
+  });
+  const cancelled = data?.id
+    ? await sdk.emails.cancelScheduled(data.id)
+    : { data: null, error: null };
+  const after = data?.id ? await sdk.emails.get(data.id) : { data: null };
+  record(
+    'scheduled send round trip',
+    !error &&
+      data.status === 'SCHEDULED' &&
+      Date.parse(data.scheduledAt) === sendAt.getTime() &&
+      cancelled.data?.deleted === true &&
+      after.data?.status === 'CANCELLED',
+    error?.code ??
+      cancelled.error?.code ??
+      `${data?.status} -> ${after.data?.status}`,
   );
 }
 
@@ -313,16 +340,37 @@ let sendId;
 // manual suppression round trip (an opt-out of this workspace, which any key lifts)
 {
   const address = 'sdk-e2e-suppress@example.com';
-  const { error: addError } = await sdk.suppressions.add({
+  const { data: added, error: addError } = await sdk.suppressions.add({
     email: address,
     note: 'sdk e2e',
   });
   const { data: verdict } = await sdk.suppressions.check(address);
-  const { error: removeError } = await sdk.suppressions.remove(address);
+  const { data: removed, error: removeError } =
+    await sdk.suppressions.remove(address);
   record(
     'suppression round trip',
-    !addError && verdict?.suppressed === true && !removeError,
+    !addError &&
+      added.reason === 'MANUAL' &&
+      added.tier === 'CONSENT' &&
+      verdict?.suppressed === true &&
+      !removeError &&
+      removed.deleted === true,
     addError?.code ?? removeError?.code,
+  );
+}
+
+// every list answers one envelope, with the zero-based page asked for
+{
+  const { data, error } = await sdk.suppressions.list({ page: 0, limit: 5 });
+  record(
+    'list envelope',
+    !error &&
+      Array.isArray(data.data) &&
+      typeof data.totalCount === 'number' &&
+      data.page === 0 &&
+      data.limit === 5 &&
+      typeof data.hasNextPage === 'boolean',
+    error?.code ?? `page=${data?.page} limit=${data?.limit}`,
   );
 }
 
@@ -345,8 +393,8 @@ let sendId;
 
 // cleanup
 {
-  const { error } = await sdk.templates.remove(templateId);
-  record('templates.remove', !error, error?.code);
+  const { data, error } = await sdk.templates.remove(templateId);
+  record('templates.remove', !error && data.deleted === true, error?.code);
 }
 
 // a wrong key is a typed 401 value, not a throw
@@ -356,7 +404,11 @@ let sendId;
     maxRetries: 0,
   });
   const { error } = await bad.usage.get();
-  record('401 typed error', error?.statusCode === 401, error?.code);
+  record(
+    '401 typed error',
+    error?.statusCode === 401 && error.kind === 'api',
+    error?.code,
+  );
 }
 
 const passed = results.filter(Boolean).length;

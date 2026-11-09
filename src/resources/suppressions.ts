@@ -1,27 +1,29 @@
 import type { HttpClient, RequestOptions } from '../client.js';
 import type { Result } from '../errors.js';
 import type {
-  EmailDeliverability,
-  ListSuppressionsParams,
-  PaginatedResult,
-  SuppressionEntry,
-} from '../types.js';
+  DeletedResponse,
+  PaginatedResponse,
+  SuppressEmailRequest,
+  SuppressionCheckResponse,
+  SuppressionEntryResponse,
+} from '../generated.js';
+import type { ListSuppressionsParams } from '../types.js';
 
 export class Suppressions {
   constructor(private readonly client: HttpClient) {}
 
   /**
    * The addresses SendHeron refuses to send to from this key's workspace,
-   * with reason, source and timestamp: the workspace's own opt-outs, and
-   * the organization's bounces and complaints for addresses the workspace
-   * has as contacts or has sent to. `tier: 'HARD'` (bounce, complaint)
-   * blocks every stream, transactional included; `'CONSENT'` blocks
-   * marketing only.
+   * with reason, tier, source and timestamp: the workspace's own opt-outs,
+   * and the organization's bounces and complaints for addresses the
+   * workspace has as contacts or has sent to. `tier: 'HARD'` (bounce,
+   * complaint) blocks every stream, transactional included; `'CONSENT'`
+   * blocks marketing only. `page` is zero-based, `limit` at most 100.
    */
   list(
     params?: ListSuppressionsParams,
     options?: RequestOptions,
-  ): Promise<Result<PaginatedResult<SuppressionEntry>>> {
+  ): Promise<Result<PaginatedResponse<SuppressionEntryResponse>>> {
     return this.client.get('/api/v1/suppressions', { ...params }, options);
   }
 
@@ -44,34 +46,35 @@ export class Suppressions {
   check(
     email: string,
     options?: RequestOptions,
-  ): Promise<Result<EmailDeliverability>> {
+  ): Promise<Result<SuppressionCheckResponse>> {
     return this.client.get('/api/v1/suppressions/check', { email }, options);
   }
 
-  /** Manually suppress. Only manual reasons: bounce/complaint are recorded by the platform. */
+  /**
+   * Manually suppress, as `MANUAL` (the default) or `ADMIN`. Bounces and
+   * complaints are recorded by the platform from provider events.
+   */
   add(
-    payload: { email: string; reason?: 'manual' | 'admin'; note?: string },
+    payload: SuppressEmailRequest,
     options?: RequestOptions,
-  ): Promise<Result<SuppressionEntry>> {
+  ): Promise<Result<SuppressionEntryResponse>> {
     return this.client.post('/api/v1/suppressions', payload, options);
   }
 
   /**
-   * Lifts this workspace's own opt-outs of one address. A bounce or
-   * complaint is lifted by the account owner in the dashboard, not through
-   * the API: it blocks every workspace of the account, so an address that
-   * bounced or complained gets a 403
+   * Lifts this workspace's own opt-outs of one address, and answers
+   * `{ deleted: true }`. A bounce or complaint is lifted by the account
+   * owner in the dashboard, not through the API: it blocks every workspace
+   * of the account, so an address that bounced or complained gets a 403
    * `compliance.organizationWideSuppressionOwnerOnly` whatever the key, even
-   * when it also has an opt-out of this workspace. `note` says why.
+   * when it also has an opt-out of this workspace.
    */
   remove(
     email: string,
-    body?: { note?: string },
     options?: RequestOptions,
-  ): Promise<Result<unknown>> {
+  ): Promise<Result<DeletedResponse>> {
     return this.client.delete(
       `/api/v1/suppressions/${encodeURIComponent(email)}`,
-      body,
       options,
     );
   }

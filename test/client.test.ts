@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  type CountUsage,
-  type DroppedRecipient,
-  type FormSignupAccepted,
+  type CountUsageResponse,
+  type DroppedRecipientResponse,
+  type FormSignupAcceptedResponse,
   isHeld,
   isSenderSideBlock,
   type ScreeningReason,
@@ -11,10 +11,13 @@ import {
   SendHeron,
   SendHeronError,
   type SendHoldReason,
-  type SendingCapacityUsage,
-  type SignupFormsUsage,
+  type SendingCapacityUsageResponse,
+  type SendRecordResponse,
+  type SignupFormsUsageResponse,
+  type SuppressionCheckResponse,
+  type TemplateResponse,
   type WarmupStatus,
-  type WarmupUsage,
+  type WarmupUsageResponse,
 } from '../src/index.js';
 import { type MockServer, startMockServer } from './mock-server.js';
 
@@ -22,25 +25,63 @@ const KEY = 'ema_live_test_key';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const sentRecord = {
+/**
+ * A send the provider accepted, as every send route and `emails.get()`
+ * answer it: every field present, null when empty.
+ */
+const sentRecord: SendRecordResponse = {
   id: 'log-1',
+  workspaceId: 'ws-1',
   to: 'user@example.com',
   from: 'billing@customer.com',
   subject: 'Receipt',
-  status: 'sent',
+  status: 'SENT',
+  stream: 'TRANSACTIONAL',
+  channel: 'TRANSACTIONAL_API',
+  errorMessage: null,
+  droppedRecipients: null,
+  holdReason: null,
+  heldUntil: null,
   providerMessageId: 'ses-123',
-  organizationId: 'org-1',
-  workspaceId: 'ws-1',
+  templateId: null,
+  campaignId: null,
+  sequenceStepId: null,
+  batchId: null,
+  scheduledAt: null,
+  sentAt: '2026-11-09T10:00:00.000Z',
+  deliveredAt: null,
+  complainedAt: null,
   openCount: 0,
   clickCount: 0,
   machineOpenCount: 0,
   machineClickCount: 0,
   unconfirmedOpenCount: 0,
-  warmupFirstContact: false,
+  firstOpenedAt: null,
+  lastOpenedAt: null,
+  firstClickedAt: null,
+  lastClickedAt: null,
+  createdAt: '2026-11-09T10:00:00.000Z',
+};
+
+/** The send record with some fields changed, typed: only what the API answers. */
+const record = (fields: Partial<SendRecordResponse>): SendRecordResponse => ({
+  ...sentRecord,
+  ...fields,
+});
+
+/** A send that has not gone: no provider id, no sent time. */
+const notSent = { providerMessageId: null, sentAt: null } as const;
+
+/** Every refusal, a 429 included: the key, the status name, the sentence. */
+const tooManyRequests = {
+  statusCode: 429,
+  message: 'tooManyRequests',
+  error: 'TOO_MANY_REQUESTS',
+  description: 'Rate limit exceeded. Try again later.',
 };
 
 /** The suppressions.check() answer for an address nothing refuses. */
-const deliverable = {
+const deliverable: SuppressionCheckResponse = {
   email: 'jane@example.com',
   suppressed: false,
   tier: null,
@@ -58,7 +99,7 @@ const deliverable = {
 };
 
 /** A new organization's daily position: inside every line, warming up. */
-const sendingPosition = {
+const sendingPosition: SendingCapacityUsageResponse = {
   last24Hours: 120,
   transactionalLast24Hours: 80,
   share: 20_000,
@@ -75,8 +116,9 @@ const sendingPosition = {
 };
 
 /** A saved template, as every template route answers it. */
-const savedTemplate = {
+const savedTemplate: TemplateResponse = {
   id: 't-1',
+  workspaceId: 'ws-1',
   name: 'Welcome',
   subject: 'Welcome, {{contact.firstName}}',
   previewText: 'Your first steps, and where to find help',
@@ -85,8 +127,7 @@ const savedTemplate = {
   bodyMjml: null,
   emailType: 'TRANSACTIONAL',
   variables: ['contact.firstName'],
-  organizationId: 'org-1',
-  workspaceId: 'ws-1',
+  tags: [{ id: 'tag-1', name: 'onboarding', color: null }],
   createdAt: '2026-10-18T16:00:00.000Z',
   updatedAt: '2026-10-18T16:00:00.000Z',
 };
@@ -148,7 +189,7 @@ describe('send outcomes', () => {
 
     expect(error).toBeNull();
     expect(data).toMatchObject({
-      status: 'sent',
+      status: 'SENT',
       providerMessageId: 'ses-123',
     });
   });
@@ -157,15 +198,14 @@ describe('send outcomes', () => {
     server = await startMockServer([
       {
         status: 201,
-        body: {
-          ...sentRecord,
+        body: record({
           droppedRecipients: [
             { email: 'old@example.com', reason: 'HARD_SUPPRESSED' },
             { email: 'outsider@example.org', reason: 'SENDER_UNDER_REVIEW' },
           ],
-        },
+        }),
       },
-      { status: 200, body: { ...sentRecord, droppedRecipients: null } },
+      { status: 200, body: sentRecord },
     ]);
     const sdk = build();
 
@@ -179,8 +219,8 @@ describe('send outcomes', () => {
 
     expect(error).toBeNull();
     // The message still went, to everyone else.
-    expect(data!.status).toBe('sent');
-    const dropped: DroppedRecipient[] = data!.droppedRecipients!;
+    expect(data!.status).toBe('SENT');
+    const dropped: DroppedRecipientResponse[] = data!.droppedRecipients!;
     const reasons: SendBlockReason[] = dropped.map((copy) => copy.reason);
     expect(dropped.map((copy) => copy.email)).toEqual([
       'old@example.com',
@@ -197,12 +237,11 @@ describe('send outcomes', () => {
     server = await startMockServer([
       {
         status: 201,
-        body: {
-          ...sentRecord,
-          status: 'suppressed',
+        body: record({
+          ...notSent,
+          status: 'SUPPRESSED',
           errorMessage: 'HARD_SUPPRESSED',
-          providerMessageId: undefined,
-        },
+        }),
       },
     ]);
 
@@ -214,7 +253,7 @@ describe('send outcomes', () => {
 
     expect(error).toBeNull();
     expect(data).toMatchObject({
-      status: 'suppressed',
+      status: 'SUPPRESSED',
       errorMessage: 'HARD_SUPPRESSED',
     });
     // One request: a suppression is an outcome and must never be retried.
@@ -225,13 +264,12 @@ describe('send outcomes', () => {
     server = await startMockServer([
       {
         status: 201,
-        body: {
-          ...sentRecord,
-          status: 'queued',
-          providerMessageId: undefined,
+        body: record({
+          ...notSent,
+          status: 'QUEUED',
           holdReason: 'PLATFORM_DAILY_LIMIT',
           heldUntil: '2026-10-16T11:10:00.000Z',
-        },
+        }),
       },
     ]);
 
@@ -244,10 +282,9 @@ describe('send outcomes', () => {
     expect(error).toBeNull();
     expect(isHeld(data!)).toBe(true);
     expect(data).toMatchObject({
-      status: 'queued',
+      status: 'QUEUED',
       holdReason: 'PLATFORM_DAILY_LIMIT',
       heldUntil: '2026-10-16T11:10:00.000Z',
-      warmupFirstContact: false,
     });
     // One request: a held send goes out by itself. Retrying with a new key
     // would send it twice.
@@ -258,39 +295,27 @@ describe('send outcomes', () => {
     server = await startMockServer([
       {
         status: 200,
-        body: {
-          ...sentRecord,
-          status: 'queued',
-          providerMessageId: null,
+        body: record({
+          ...notSent,
+          status: 'QUEUED',
           holdReason: 'WARMUP_SAMPLE',
           heldUntil: '2026-10-16T11:40:00.000Z',
-        },
+        }),
       },
-      {
-        status: 200,
-        body: {
-          ...sentRecord,
-          holdReason: null,
-          heldUntil: null,
-          warmupFirstContact: true,
-        },
-      },
+      { status: 200, body: sentRecord },
     ]);
     const sdk = build();
 
     const waiting = await sdk.emails.get('log-1');
     expect(isHeld(waiting.data!)).toBe(true);
-    // Counted in a warm-up slice only once it is admitted.
-    expect(waiting.data!.warmupFirstContact).toBe(false);
 
     const gone = await sdk.emails.get('log-1');
     expect(isHeld(gone.data!)).toBe(false);
     expect(gone.data).toMatchObject({
       id: 'log-1',
-      status: 'sent',
+      status: 'SENT',
       holdReason: null,
       heldUntil: null,
-      warmupFirstContact: true,
     });
   });
 
@@ -298,13 +323,12 @@ describe('send outcomes', () => {
     server = await startMockServer([
       {
         status: 201,
-        body: {
-          ...sentRecord,
+        body: record({
+          ...notSent,
           to: 'gone@example.com',
-          status: 'suppressed',
+          status: 'SUPPRESSED',
           errorMessage: 'ADDRESS_UNDELIVERABLE',
-          providerMessageId: undefined,
-        },
+        }),
       },
     ]);
 
@@ -316,7 +340,7 @@ describe('send outcomes', () => {
 
     expect(error).toBeNull();
     expect(data).toMatchObject({
-      status: 'suppressed',
+      status: 'SUPPRESSED',
       errorMessage: 'ADDRESS_UNDELIVERABLE',
     });
     // The address cannot receive email, transactional included: drop it.
@@ -324,18 +348,17 @@ describe('send outcomes', () => {
     expect(server.requests).toHaveLength(1);
   });
 
-  it('passes an import slice hold through as DATA, with its import', async () => {
+  it('passes an import slice hold through as DATA', async () => {
     server = await startMockServer([
       {
         status: 201,
-        body: {
-          ...sentRecord,
-          status: 'queued',
-          providerMessageId: undefined,
+        body: record({
+          ...notSent,
+          channel: 'DIRECT',
+          status: 'QUEUED',
           holdReason: 'IMPORT_SAMPLE',
           heldUntil: '2026-10-19T09:40:00.000Z',
-          contactImportId: 'import-1',
-        },
+        }),
       },
     ]);
 
@@ -348,11 +371,8 @@ describe('send outcomes', () => {
     expect(error).toBeNull();
     expect(isHeld(data!)).toBe(true);
     expect(data).toMatchObject({
-      status: 'queued',
+      status: 'QUEUED',
       holdReason: 'IMPORT_SAMPLE',
-      contactImportId: 'import-1',
-      // The import's own slice, not a new sender's warm-up.
-      warmupFirstContact: false,
     });
     // One request: it goes out by itself with the import's next slice.
     expect(server.requests).toHaveLength(1);
@@ -362,14 +382,12 @@ describe('send outcomes', () => {
     server = await startMockServer([
       {
         status: 200,
-        body: {
-          ...sentRecord,
-          status: 'queued',
-          providerMessageId: null,
+        body: record({
+          ...notSent,
+          status: 'QUEUED',
           holdReason: 'IMPORT_SAMPLE_FAILED',
           heldUntil: '2026-10-19T10:10:00.000Z',
-          contactImportId: 'import-1',
-        },
+        }),
       },
     ]);
 
@@ -378,9 +396,8 @@ describe('send outcomes', () => {
     // A slice of the import bounced or drew complaints past the line: the
     // rest of it waits for a person at SendHeron, still never retried.
     expect(isHeld(data!)).toBe(true);
-    const reason: SendHoldReason | null | undefined = data!.holdReason;
+    const reason: SendHoldReason | null = data!.holdReason;
     expect(reason).toBe('IMPORT_SAMPLE_FAILED');
-    expect(data!.contactImportId).toBe('import-1');
   });
 
   it('surfaces API errors as typed values, never throws', async () => {
@@ -403,6 +420,7 @@ describe('send outcomes', () => {
 
     expect(data).toBeNull();
     expect(error).toBeInstanceOf(SendHeronError);
+    expect(error!.kind).toBe('api');
     expect(error!.statusCode).toBe(400);
     expect(error!.code).toBe('emailSending.attachmentsRequireTransactional');
   });
@@ -423,6 +441,7 @@ describe('send outcomes', () => {
     });
 
     expect(error!.statusCode).toBe(403);
+    expect(error!.kind).toBe('transport');
     expect(error!.code).toBe('invalid_response');
     expect(error!.message).toContain('error code: 1010');
   });
@@ -451,7 +470,7 @@ describe('idempotency', () => {
   });
 
   it('does NOT auto-arm idempotency outside the email routes', async () => {
-    server = await startMockServer([{ status: 201, body: { id: 't-1' } }]);
+    server = await startMockServer([{ status: 201, body: savedTemplate }]);
 
     await build().templates.create({
       name: 'n',
@@ -461,6 +480,31 @@ describe('idempotency', () => {
     });
 
     expect(server.requests[0]!.headers['idempotency-key']).toBeUndefined();
+  });
+
+  it('sends a key on the three sends only, never one the API would not honor', async () => {
+    // The API deduplicates the three send routes and serves every other
+    // route fresh, so a key anywhere else would promise a replay that never
+    // happens.
+    server = await startMockServer([
+      { status: 201, body: savedTemplate },
+      { status: 200, body: sentRecord },
+      { status: 200, body: { deleted: true } },
+    ]);
+    const sdk = build();
+    const options = { idempotencyKey: 'not-a-send' };
+
+    await sdk.templates.create(
+      { name: 'n', subject: 's', bodyHtml: '<p>x</p>', emailType: 'MARKETING' },
+      options,
+    );
+    await sdk.emails.get('log-1', options);
+    const { data } = await sdk.emails.cancelScheduled('log-1', options);
+
+    expect(data).toEqual({ deleted: true });
+    for (const request of server.requests) {
+      expect(request.headers['idempotency-key']).toBeUndefined();
+    }
   });
 });
 
@@ -481,7 +525,7 @@ describe('retries', () => {
     });
 
     expect(error).toBeNull();
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
     expect(server.requests).toHaveLength(2);
     // The whole point: both attempts replay ONE logical request.
     expect(server.requests[0]!.headers['idempotency-key']).toBe(
@@ -523,7 +567,7 @@ describe('retries', () => {
       {
         status: 429,
         headers: { 'retry-after': '0' },
-        body: { statusCode: 429, message: 'Rate limit exceeded.' },
+        body: tooManyRequests,
       },
       { status: 201, body: sentRecord },
     ]);
@@ -534,7 +578,7 @@ describe('retries', () => {
       html: '<p>x</p>',
     });
 
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
     expect(server.requests).toHaveLength(2);
   });
 
@@ -543,7 +587,7 @@ describe('retries', () => {
       {
         status: 429,
         headers: { 'retry-after': '17' },
-        body: { statusCode: 429, message: 'Rate limit exceeded.' },
+        body: tooManyRequests,
       },
     ]);
 
@@ -570,13 +614,13 @@ describe('retries', () => {
     });
 
     expect(error).toBeNull();
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
   });
 
   it('never retries a write without an idempotency key', async () => {
     server = await startMockServer([
       { status: 503, body: { statusCode: 503, message: 'oops' } },
-      { status: 201, body: { id: 't-1' } },
+      { status: 201, body: savedTemplate },
     ]);
 
     const { error } = await build().templates.create({
@@ -636,7 +680,7 @@ describe('retries', () => {
     });
 
     expect(error).toBeNull();
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
     expect(server.requests).toHaveLength(2);
     expect(server.requests[1]!.headers['idempotency-key']).toBe(
       server.requests[0]!.headers['idempotency-key'],
@@ -710,7 +754,7 @@ describe('retries', () => {
         headers: { 'retry-after': '5' },
         body: { statusCode: 503, message: 'serviceUnavailable' },
       },
-      { status: 201, body: { id: 't-1' } },
+      { status: 201, body: savedTemplate },
     ]);
 
     const { error } = await build().templates.create({
@@ -802,8 +846,8 @@ describe('edge cases', () => {
     expect(server.requests).toHaveLength(1);
   });
 
-  it('uses PATCH for template updates and DELETE with a body for unsuppress', async () => {
-    server = await startMockServer([{ status: 200, body: { id: 't-1' } }]);
+  it('uses PATCH for template updates', async () => {
+    server = await startMockServer([{ status: 200, body: savedTemplate }]);
     const sdk = build();
 
     await sdk.templates.update('t-1', {
@@ -813,6 +857,32 @@ describe('edge cases', () => {
 
     expect(server.requests[0]!.method).toBe('PATCH');
     expect(server.requests[0]!.url).toBe('/api/v1/templates/t-1');
+  });
+
+  it('deletes take no body and answer { deleted: true }', async () => {
+    server = await startMockServer([{ status: 200, body: { deleted: true } }]);
+    const sdk = build();
+
+    const results = [
+      await sdk.templates.remove('t-1'),
+      await sdk.suppressions.remove('a+b@c.co'),
+      await sdk.emails.cancelScheduled('sched-1'),
+    ];
+
+    expect(results.map((result) => result.data)).toEqual([
+      { deleted: true },
+      { deleted: true },
+      { deleted: true },
+    ]);
+    expect(server.requests.map((request) => request.url)).toEqual([
+      '/api/v1/templates/t-1',
+      '/api/v1/suppressions/a%2Bb%40c.co',
+      '/api/v1/emails/scheduled/sched-1',
+    ]);
+    for (const request of server.requests) {
+      expect(request.method).toBe('DELETE');
+      expect(request.body).toBe('');
+    }
   });
 
   it('sendBulk posts the audience payload and returns the batch result', async () => {
@@ -826,9 +896,15 @@ describe('edge cases', () => {
     const { data } = await build().emails.sendBulk({
       templateId: 't-1',
       listId: 'l-1',
+      variables: { offer: 'Spring sale' },
     });
 
     expect(server.requests[0]!.url).toBe('/api/v1/emails/send-bulk');
+    expect(JSON.parse(server.requests[0]!.body)).toEqual({
+      templateId: 't-1',
+      listId: 'l-1',
+      variables: { offer: 'Spring sale' },
+    });
     expect(data).toMatchObject({ batchId: 'b-1', queued: 9, blocked: 1 });
   });
 });
@@ -859,7 +935,7 @@ describe('review-pinned behaviors', () => {
     });
 
     expect(error).toBeNull();
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
     expect(server.requests).toHaveLength(2);
   });
 
@@ -882,7 +958,7 @@ describe('review-pinned behaviors', () => {
     });
 
     expect(error).toBeNull();
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
     expect(server.requests).toHaveLength(2);
   });
 
@@ -928,9 +1004,9 @@ describe('review-pinned behaviors', () => {
       {
         status: 429,
         headers: { 'retry-after': '0' },
-        body: { statusCode: 429, message: 'Rate limit exceeded.' },
+        body: tooManyRequests,
       },
-      { status: 201, body: { id: 't-1' } },
+      { status: 201, body: savedTemplate },
     ]);
 
     const { data } = await build().templates.create({
@@ -944,20 +1020,16 @@ describe('review-pinned behaviors', () => {
     expect(server.requests).toHaveLength(2);
   });
 
-  it('normalizes the 429 code to rate_limited', async () => {
-    server = await startMockServer([
-      {
-        status: 429,
-        body: {
-          statusCode: 429,
-          message: 'Rate limit exceeded. Try again later.',
-        },
-      },
-    ]);
+  it('reads a 429 like every other refusal: the key and the sentence', async () => {
+    server = await startMockServer([{ status: 429, body: tooManyRequests }]);
 
     const { error } = await build(0).usage.get();
 
-    expect(error!.code).toBe('rate_limited');
+    expect(error!.kind).toBe('api');
+    expect(error!.statusCode).toBe(429);
+    expect(error!.code).toBe('tooManyRequests');
+    expect(error!.description).toBe('Rate limit exceeded. Try again later.');
+    expect(error!.retryable).toBe(true);
   });
 
   it('does not burn an attempt when Retry-After exceeds the wait cap', async () => {
@@ -965,7 +1037,7 @@ describe('review-pinned behaviors', () => {
       {
         status: 429,
         headers: { 'retry-after': '3600' },
-        body: { statusCode: 429, message: 'Rate limit exceeded.' },
+        body: tooManyRequests,
       },
       { status: 201, body: sentRecord },
     ]);
@@ -986,7 +1058,7 @@ describe('review-pinned behaviors', () => {
       {
         status: 429,
         headers: { 'retry-after': new Date(Date.now() + 1000).toUTCString() },
-        body: { statusCode: 429, message: 'Rate limit exceeded.' },
+        body: tooManyRequests,
       },
       { status: 201, body: sentRecord },
     ]);
@@ -997,7 +1069,7 @@ describe('review-pinned behaviors', () => {
       html: '<p>x</p>',
     });
 
-    expect(data!.status).toBe('sent');
+    expect(data!.status).toBe('SENT');
     expect(server.requests).toHaveLength(2);
   });
 
@@ -1006,7 +1078,7 @@ describe('review-pinned behaviors', () => {
       {
         status: 429,
         headers: { 'retry-after': '20' },
-        body: { statusCode: 429, message: 'Rate limit exceeded.' },
+        body: tooManyRequests,
       },
     ]);
     const controller = new AbortController();
@@ -1019,6 +1091,7 @@ describe('review-pinned behaviors', () => {
     );
 
     expect(error!.code).toBe('aborted');
+    expect(error!.kind).toBe('transport');
     expect(Date.now() - startedAt).toBeLessThan(2_000);
   });
 
@@ -1046,11 +1119,11 @@ describe('review-pinned behaviors', () => {
   });
 
   it('a caller key outside the email routes does not arm retries', async () => {
-    // The server only implements idempotency under /api/v1/emails/; a key it
-    // ignores must not make a 503 retry create a duplicate template.
+    // The server deduplicates the three sends only; a key it ignores must
+    // not make a 503 retry create a duplicate template.
     server = await startMockServer([
       { status: 503, body: { statusCode: 503, message: 'oops' } },
-      { status: 201, body: { id: 't-1' } },
+      { status: 201, body: savedTemplate },
     ]);
 
     const { error } = await build().templates.create(
@@ -1065,6 +1138,7 @@ describe('review-pinned behaviors', () => {
 
     expect(error!.statusCode).toBe(503);
     expect(server.requests).toHaveLength(1);
+    expect(server.requests[0]!.headers['idempotency-key']).toBeUndefined();
   });
 
   it('times out a hung attempt', async () => {
@@ -1078,6 +1152,8 @@ describe('review-pinned behaviors', () => {
     const { error } = await sdk.usage.get();
 
     expect(error!.code).toBe('timeout');
+    expect(error!.kind).toBe('transport');
+    expect(error!.retryable).toBe(true);
   });
 
   it('sendBulk auto-arms an idempotency key too', async () => {
@@ -1095,24 +1171,73 @@ describe('review-pinned behaviors', () => {
     );
   });
 
-  it('an empty body resolves to null data', async () => {
+  it('an empty 2xx body is invalid_response, never data', async () => {
+    // Every route answers a JSON body: typing an empty one as the record
+    // would hand callers a null they were promised could not happen.
     server = await startMockServer([{ status: 200 }]);
 
     const { data, error } = await build().usage.get();
 
-    expect(error).toBeNull();
     expect(data).toBeNull();
+    expect(error!.kind).toBe('transport');
+    expect(error!.code).toBe('invalid_response');
+    expect(error!.statusCode).toBe(200);
+  });
+
+  it('never takes the HTTP status name for the description', async () => {
+    server = await startMockServer([
+      {
+        status: 400,
+        body: {
+          statusCode: 400,
+          message: 'emailSending.tooManyRecipients',
+          error: 'BAD_REQUEST',
+        },
+      },
+    ]);
+
+    const { error } = await build().emails.send({
+      to: 'a@b.co',
+      subject: 's',
+      html: '<p>x</p>',
+    });
+
+    expect(error!.code).toBe('emailSending.tooManyRecipients');
+    expect(error!.description).toBeUndefined();
+  });
+
+  it('reads a JSON body without a key as invalid_response, never an API code', async () => {
+    // An edge or proxy can answer JSON too; only the API's own shape carries
+    // a key in `message`.
+    server = await startMockServer([
+      { status: 502, body: { error: 'Bad Gateway' } },
+    ]);
+
+    const { error } = await build(0).usage.get();
+
+    expect(error!.kind).toBe('transport');
+    expect(error!.code).toBe('invalid_response');
+    expect(error!.statusCode).toBe(502);
+    expect(error!.retryable).toBe(true);
   });
 });
 
 describe('request shaping', () => {
-  it('serializes a Date sendAt to ISO-8601', async () => {
+  it('schedules with a Date, and answers the same record, SCHEDULED', async () => {
     const sendAt = new Date('2026-09-01T09:00:00.000Z');
     server = await startMockServer([
-      { status: 201, body: { id: 'sched-1', status: 'SCHEDULED' } },
+      {
+        status: 201,
+        body: record({
+          ...notSent,
+          id: 'sched-1',
+          status: 'SCHEDULED',
+          scheduledAt: '2026-09-01T09:00:00.000Z',
+        }),
+      },
     ]);
 
-    await build().emails.send({
+    const { data } = await build().emails.send({
       to: 'a@b.co',
       subject: 's',
       html: '<p>x</p>',
@@ -1122,11 +1247,17 @@ describe('request shaping', () => {
     expect(JSON.parse(server.requests[0]!.body).sendAt).toBe(
       '2026-09-01T09:00:00.000Z',
     );
+    // One record type: get() reads it, cancelScheduled() cancels it.
+    expect(data).toMatchObject({
+      id: 'sched-1',
+      status: 'SCHEDULED',
+      scheduledAt: '2026-09-01T09:00:00.000Z',
+    });
   });
 
   it('builds query strings and encodes path params', async () => {
     server = await startMockServer([
-      { status: 200, body: { email: 'a+b@c.co', suppressed: false } },
+      { status: 200, body: { ...deliverable, email: 'a+b@c.co' } },
     ]);
     const sdk = build();
 
@@ -1135,25 +1266,43 @@ describe('request shaping', () => {
       '/api/v1/suppressions/check?email=a%2Bb%40c.co',
     );
 
-    await sdk.suppressions.remove('a+b@c.co', { note: 'asked to rejoin' });
+    await sdk.suppressions.remove('a+b@c.co');
     expect(server.requests[1]!.url).toBe('/api/v1/suppressions/a%2Bb%40c.co');
-    expect(JSON.parse(server.requests[1]!.body)).toEqual({
-      note: 'asked to rejoin',
-    });
+    expect(server.requests[1]!.body).toBe('');
+  });
+
+  it('sends a list filter as the parameter repeated', async () => {
+    server = await startMockServer([
+      {
+        status: 200,
+        body: {
+          data: [],
+          totalCount: 0,
+          page: 0,
+          limit: 50,
+          hasNextPage: false,
+        },
+      },
+    ]);
+
+    await build().templates.list({ tagIds: ['tag-1', 'tag-2'], page: 2 });
+
+    expect(server.requests[0]!.url).toBe(
+      '/api/v1/templates?tagIds=tag-1&tagIds=tag-2&page=2',
+    );
   });
 
   it('reads machine and privacy-proxy engagement beside the people counts', async () => {
     server = await startMockServer([
       {
         status: 200,
-        body: {
-          ...sentRecord,
-          status: 'delivered',
+        body: record({
+          status: 'DELIVERED',
           deliveredAt: '2026-10-15T17:00:00.000Z',
           machineOpenCount: 2,
           machineClickCount: 3,
           unconfirmedOpenCount: 1,
-        },
+        }),
       },
     ]);
 
@@ -1161,7 +1310,7 @@ describe('request shaping', () => {
 
     expect(error).toBeNull();
     // Only machines and a privacy proxy touched it: delivered, never opened.
-    expect(data!.status).toBe('delivered');
+    expect(data!.status).toBe('DELIVERED');
     expect(data!.openCount).toBe(0);
     expect(data!.clickCount).toBe(0);
     expect(data!.machineOpenCount).toBe(2);
@@ -1452,7 +1601,7 @@ describe('request shaping', () => {
 
     const { data } = await build().usage.get();
 
-    const caps: CountUsage[] = [
+    const caps: CountUsageResponse[] = [
       data!.domains,
       data!.workspaces,
       data!.teamMembers,
@@ -1510,13 +1659,13 @@ describe('request shaping', () => {
 
     const { data } = await build().usage.get();
 
-    const sending: SendingCapacityUsage = data!.sending!;
+    const sending: SendingCapacityUsageResponse = data!.sending!;
     // Under its own lines, yet nothing more fits today: the platform's
     // marketing line holds everyone's marketing until the window moves.
     expect(sending.platformMarketingHeld).toBe(true);
     expect(sending.marketingRemaining).toBe(0);
     expect(sending.held).toBe(37);
-    const warmup: WarmupUsage = sending.warmup;
+    const warmup: WarmupUsageResponse = sending.warmup;
     expect(warmup.status).toBe('COMPLETE');
     expect(warmup.completedAt).toBe('2026-10-16T10:28:00.000Z');
   });
@@ -1625,7 +1774,7 @@ describe('request shaping', () => {
 
     // The plan caps are null on an unlimited plan; the forms cap is not one.
     expect(data!.domains.cap).toBeNull();
-    const signupForms: SignupFormsUsage = data!.signupForms;
+    const signupForms: SignupFormsUsageResponse = data!.signupForms;
     expect(signupForms.forms).toEqual({ used: 12, cap: 100, remaining: 88 });
     expect(signupForms.pendingSignups).toBe(41);
     expect(signupForms.confirmedLast30Days).toBe(380);
@@ -1663,6 +1812,9 @@ describe('templates', () => {
             { ...savedTemplate, id: 't-2', previewText: null },
           ],
           totalCount: 2,
+          page: 0,
+          limit: 50,
+          hasNextPage: false,
         },
       },
     ]);
@@ -1673,6 +1825,13 @@ describe('templates', () => {
       'Your first steps, and where to find help',
       null,
     ]);
+    // One envelope on every list: the zero-based page that was asked for.
+    expect(data).toMatchObject({
+      totalCount: 2,
+      page: 0,
+      limit: 50,
+      hasNextPage: false,
+    });
   });
 
   it('removes preview text with an explicit null, and keeps it when left out', async () => {
@@ -1724,7 +1883,7 @@ describe('templates', () => {
   it('previews a subject and preview text as the inbox shows them', async () => {
     server = await startMockServer([
       {
-        status: 201,
+        status: 200,
         body: {
           renderedHtml:
             '<div style="display:none;">Your first steps, Ada</div><p>Hi Ada</p>',
@@ -1741,13 +1900,14 @@ describe('templates', () => {
     const { data, error } = await build().templates.preview({
       bodyHtml: '<p>Hi {{contact.firstName}}</p>',
       emailType: 'TRANSACTIONAL',
-      sampleData: { contact: { firstName: 'Ada' } },
+      variables: { contact: { firstName: 'Ada' } },
       subject: 'Welcome, {{contact.firstName}}',
       previewText: 'Your first steps, {{contact.firstName}}',
     });
 
     expect(error).toBeNull();
     expect(JSON.parse(server.requests[0]!.body)).toMatchObject({
+      variables: { contact: { firstName: 'Ada' } },
       subject: 'Welcome, {{contact.firstName}}',
       previewText: 'Your first steps, {{contact.firstName}}',
     });
@@ -1760,7 +1920,7 @@ describe('templates', () => {
   it('reads a preview without a subject or preview text as null', async () => {
     server = await startMockServer([
       {
-        status: 201,
+        status: 200,
         body: {
           renderedHtml: '<p>Hi Ada</p>',
           renderedSubject: null,
@@ -1775,7 +1935,7 @@ describe('templates', () => {
 
     const { data } = await build().templates.preview({
       bodyHtml: '<p>Hi {{contact.firstName}}</p>',
-      sampleData: { contact: { firstName: 'Ada' } },
+      variables: { contact: { firstName: 'Ada' } },
     });
 
     expect(data!.renderedSubject).toBeNull();
@@ -1785,7 +1945,7 @@ describe('templates', () => {
   it('validates a document with the preview text it will carry', async () => {
     server = await startMockServer([
       {
-        status: 201,
+        status: 200,
         body: {
           valid: false,
           issues: ['previewText must be at most 200 characters'],
@@ -1810,9 +1970,7 @@ describe('templates', () => {
   });
 
   it('validate still reads an object second as the request options', async () => {
-    server = await startMockServer([
-      { status: 429, body: { statusCode: 429, message: 'Too many requests' } },
-    ]);
+    server = await startMockServer([{ status: 429, body: tooManyRequests }]);
     const sdk = build();
 
     const { error } = await sdk.templates.validate(blockDocument, {
@@ -1823,7 +1981,7 @@ describe('templates', () => {
 
     // maxRetries: 0 reached the client in every form: one attempt each,
     // where the 429 would otherwise retry twice.
-    expect(error!.code).toBe('rate_limited');
+    expect(error!.code).toBe('tooManyRequests');
     expect(server.requests).toHaveLength(3);
     for (const request of server.requests) {
       expect(JSON.parse(request.body)).toEqual({ document: blockDocument });
@@ -1842,14 +2000,14 @@ describe('forms', () => {
 
   it('signs up through a form: 202 accepted, the body as given', async () => {
     server = await startMockServer([
-      { status: 202, body: { status: 'accepted' } },
+      { status: 202, body: { status: 'ACCEPTED' } },
     ]);
 
     const { data, error } = await build().forms.signup(FORM_ID, signup);
 
     expect(error).toBeNull();
-    const accepted: FormSignupAccepted = data!;
-    expect(accepted).toEqual({ status: 'accepted' });
+    const accepted: FormSignupAcceptedResponse = data!;
+    expect(accepted).toEqual({ status: 'ACCEPTED' });
     const request = server.requests[0]!;
     expect(request.method).toBe('POST');
     expect(request.url).toBe(`/api/v1/forms/${FORM_ID}/signups`);
@@ -1879,7 +2037,8 @@ describe('forms', () => {
         body: {
           statusCode: 409,
           message: 'signupForms.unavailable',
-          error: 'This form is not taking signups (SWITCHED_OFF).',
+          error: 'CONFLICT',
+          description: 'This form is not taking signups (SWITCHED_OFF).',
         },
       },
     ]);
@@ -1897,7 +2056,7 @@ describe('forms', () => {
   it('never retries a 5xx: a signup is not replay-safe', async () => {
     server = await startMockServer([
       { status: 503, body: { statusCode: 503, message: 'oops' } },
-      { status: 202, body: { status: 'accepted' } },
+      { status: 202, body: { status: 'ACCEPTED' } },
     ]);
 
     const { error } = await build().forms.signup(FORM_ID, signup);
@@ -1911,14 +2070,14 @@ describe('forms', () => {
       {
         status: 429,
         headers: { 'retry-after': '3600' },
-        body: { statusCode: 429, message: 'tooManyRequests' },
+        body: tooManyRequests,
       },
-      { status: 202, body: { status: 'accepted' } },
+      { status: 202, body: { status: 'ACCEPTED' } },
     ]);
 
     const { error } = await build().forms.signup(FORM_ID, signup);
 
-    expect(error!.code).toBe('rate_limited');
+    expect(error!.code).toBe('tooManyRequests');
     expect(error!.retryAfterSeconds).toBe(3600);
     expect(server.requests).toHaveLength(1);
   });
