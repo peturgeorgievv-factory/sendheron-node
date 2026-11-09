@@ -4370,7 +4370,7 @@
           },
           "fromEmail": {
             "type": "string",
-            "description": "The From address. Accepted when its domain is added to this workspace (verification may still be pending) or verified in another workspace of this organization, and reported as unsendable until it is authenticated here, so an identity can be prepared before the DNS is in place. Any other domain is refused.",
+            "description": "The From address. Accepted when its domain is added to this workspace (verification may still be pending), and reported as unsendable until it is authenticated here, so an identity can be prepared before the DNS is in place. Any other domain is refused, including one verified in another workspace of this organization: a key never reaches beyond its workspace.",
             "example": "billing@acme.com"
           },
           "fromName": {
