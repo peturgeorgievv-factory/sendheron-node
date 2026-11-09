@@ -1,6 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  type EmailSendRecord,
   type EmailSendStatus,
   isHeld,
   isSenderSideBlock,
@@ -11,12 +11,44 @@ import {
   SENDER_SIDE_BLOCK_REASONS,
   SendHeronError,
   type SendHoldReason,
+  type SendRecordResponse,
 } from '../src/index.js';
 
+/** An enum as the committed API document declares it, in its order. */
+const specEnum = (schema: string, property: string): string[] => {
+  const spec = JSON.parse(readFileSync('spec/openapi.json', 'utf8')) as {
+    components: {
+      schemas: Record<
+        string,
+        {
+          properties: Record<
+            string,
+            { enum?: string[]; items?: { enum?: string[] } }
+          >;
+        }
+      >;
+    };
+  };
+  const value = spec.components.schemas[schema]?.properties[property];
+  const values = value?.enum ?? value?.items?.enum;
+  if (!values) throw new Error(`${schema}.${property} has no enum`);
+  return values;
+};
+
 describe('block reason groupings', () => {
+  it('lists exactly the block reasons the API answers', () => {
+    // After a spec refresh, a reason the backend added fails this until it
+    // is listed, and the partition below until it is classified.
+    expect([...SEND_BLOCK_REASONS]).toEqual(
+      specEnum('DroppedRecipientResponse', 'reason'),
+    );
+    expect([...SEND_BLOCK_REASONS]).toEqual(
+      specEnum('ChannelDeliverabilityResponse', 'blockReason'),
+    );
+  });
+
   it('sender-side and recipient partitions cover the full reason list exactly', () => {
-    // If the backend grows another reason, this fails until the new reason
-    // is classified: grouping stays a deliberate decision.
+    // Grouping stays a deliberate decision: every reason is in exactly one.
     const union = [...SENDER_SIDE_BLOCK_REASONS, ...RECIPIENT_BLOCK_REASONS];
     expect([...union].sort()).toEqual([...SEND_BLOCK_REASONS].sort());
     expect(new Set(union).size).toBe(SEND_BLOCK_REASONS.length);
@@ -48,65 +80,49 @@ describe('block reason groupings', () => {
 
 describe('address screening', () => {
   it('SCREENING_REASONS lists exactly the API screening reasons, most serious first', () => {
-    // The backend's ScreeningReason enum (email-automation-service #144).
     // A contact's screeningReasons come sorted in this order.
-    expect([...SCREENING_REASONS]).toEqual([
-      'INVALID_SYNTAX',
-      'KNOWN_HARD_BOUNCE',
-      'DOMAIN_NOT_FOUND',
-      'NO_MAIL_SERVER',
-      'DISPOSABLE_DOMAIN',
-      'LIKELY_TYPO',
-      'ROLE_ADDRESS',
-      'SYSTEM_ADDRESS',
-      'DNS_UNCHECKED',
-    ]);
+    expect([...SCREENING_REASONS]).toEqual(
+      specEnum('SuppressionCheckResponse', 'screeningReasons'),
+    );
   });
 });
 
 describe('held sends', () => {
-  type HoldFields = Pick<EmailSendRecord, 'status' | 'holdReason'>;
+  type HoldFields = Pick<SendRecordResponse, 'status' | 'holdReason'>;
 
   it('SEND_HOLD_REASONS lists exactly the API hold reasons', () => {
-    // The backend's SendHoldReason enum (email-automation-service #143,
-    // and #144 for the import slices).
-    expect([...SEND_HOLD_REASONS]).toEqual([
-      'PLATFORM_DAILY_LIMIT',
-      'ORGANIZATION_DAILY_SHARE',
-      'EARNED_VOLUME',
-      'WARMUP_SAMPLE',
-      'WARMUP_SAMPLE_FAILED',
-      'IMPORT_SAMPLE',
-      'IMPORT_SAMPLE_FAILED',
-    ]);
+    expect([...SEND_HOLD_REASONS]).toEqual(
+      specEnum('SendRecordResponse', 'holdReason'),
+    );
   });
 
   it('isHeld is true for a queued send with any known hold reason', () => {
     for (const holdReason of SEND_HOLD_REASONS) {
-      expect(isHeld({ status: 'queued', holdReason })).toBe(true);
+      expect(isHeld({ status: 'QUEUED', holdReason })).toBe(true);
     }
   });
 
   it('isHeld counts a reason this SDK does not know yet: it is waiting all the same', () => {
-    expect(isHeld({ status: 'queued', holdReason: 'SOME_FUTURE_HOLD' })).toBe(
+    expect(isHeld({ status: 'QUEUED', holdReason: 'SOME_FUTURE_HOLD' })).toBe(
       true,
     );
   });
 
   it('isHeld is false without a hold reason, and for every other status', () => {
-    expect(isHeld({ status: 'queued' })).toBe(false);
-    expect(isHeld({ status: 'queued', holdReason: null })).toBe(false);
-
+    expect(isHeld({ status: 'QUEUED' })).toBe(false);
+    expect(isHeld({ status: 'QUEUED', holdReason: null })).toBe(false);
     // Even with a reason still on it, kept from the 201 say: the send has
     // moved on, so nothing is waiting.
     const movedOn: EmailSendStatus[] = [
-      'sent',
-      'delivered',
-      'opened',
-      'clicked',
-      'bounced',
-      'failed',
-      'suppressed',
+      'SENT',
+      'DELIVERED',
+      'OPENED',
+      'CLICKED',
+      'BOUNCED',
+      'FAILED',
+      'SUPPRESSED',
+      'SCHEDULED',
+      'CANCELLED',
     ];
     for (const status of movedOn) {
       expect(isHeld({ status, holdReason: 'PLATFORM_DAILY_LIMIT' })).toBe(
@@ -117,14 +133,14 @@ describe('held sends', () => {
 
   it('isHeld narrows holdReason, so no null is left to handle', () => {
     const record: HoldFields = {
-      status: 'queued',
+      status: 'QUEUED',
       holdReason: 'WARMUP_SAMPLE',
     };
     if (!isHeld(record)) {
       throw new Error('expected a held send');
     }
     // Compile-time half of the test: this assignment type-checks only
-    // because isHeld removed null and undefined.
+    // because isHeld removed null.
     const reason: SendHoldReason = record.holdReason;
     expect(reason).toBe('WARMUP_SAMPLE');
   });
@@ -135,7 +151,7 @@ describe('error.retryable', () => {
     new SendHeronError({ statusCode, code });
 
   it('is true for rate limits, 5xx, and transport failures', () => {
-    expect(error(429).retryable).toBe(true);
+    expect(error(429, 'tooManyRequests').retryable).toBe(true);
     expect(error(500).retryable).toBe(true);
     expect(error(503).retryable).toBe(true);
     // Attachments could not wait for capacity: retry later with the same key.

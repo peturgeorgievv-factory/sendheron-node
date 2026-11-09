@@ -1,6 +1,6 @@
 {
   "name": "sendheron",
-  "version": "0.13.1",
+  "version": "1.0.0",
   "description": "TypeScript SDK for the SendHeron email API: typed send outcomes, automatic retries, and idempotency by default.",
   "keywords": [
     "sendheron",
@@ -47,8 +47,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "spec:update": "node scripts/spec.mjs --update",
+    "spec:update": "node scripts/spec.mjs --update && node scripts/gen-types.mjs",
     "spec:check": "node scripts/spec.mjs --check",
+    "types:generate": "node scripts/gen-types.mjs",
+    "types:check": "node scripts/gen-types.mjs --check",
     "verify": "pnpm lint && pnpm typecheck && pnpm build && pnpm test",
     "prepublishOnly": "pnpm build",
     "e2e": "node scripts/e2e.mjs",

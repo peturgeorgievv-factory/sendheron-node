@@ -34,8 +34,8 @@ if (error) {
   process.exit(1);
 }
 
-// With attachments a 201 is never held (`queued`): it is sent or suppressed.
-if (data.status === 'suppressed') {
+// With attachments a 201 is never held (`QUEUED`): it is SENT or SUPPRESSED.
+if (data.status === 'SUPPRESSED') {
   console.warn(`Refused by the compliance gate: ${data.errorMessage}`);
 } else {
   console.log(`Sent: ${data.id} (provider ${data.providerMessageId})`);

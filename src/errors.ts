@@ -5,6 +5,22 @@
 export const IN_PROGRESS_CODE = 'idempotency.requestInProgress';
 
 /**
+ * The codes of a failure that brought no usable answer from the API
+ * (`kind: 'transport'`): no response in time (`timeout`), none at all
+ * (`network_error`), your `signal` (`aborted`), or an answer that was not
+ * the API's (`invalid_response`: an edge or proxy page, an empty or cut-off
+ * body).
+ */
+export const TRANSPORT_ERROR_CODES = [
+  'network_error',
+  'timeout',
+  'aborted',
+  'invalid_response',
+] as const;
+
+export type TransportErrorCode = (typeof TRANSPORT_ERROR_CODES)[number];
+
+/**
  * One API failure, as a value.
  *
  * The client never throws on API responses: every call resolves to
@@ -13,15 +29,25 @@ export const IN_PROGRESS_CODE = 'idempotency.requestInProgress';
  * runtime outcome.
  */
 export class SendHeronError extends Error {
+  /**
+   * `api`: the API answered with a refusal, and `code` is its stable key.
+   * `transport`: no usable answer arrived, and `code` is a
+   * `TransportErrorCode`. The two never share a code.
+   */
+  readonly kind: 'api' | 'transport';
   /** HTTP status, or null when the request never got a response. */
   readonly statusCode: number | null;
   /**
-   * Machine-readable code: the API's stable translation key
-   * (e.g. `emailSending.sendFailed`, `apiKeys.insufficientScopes`), or
-   * `network_error` / `invalid_response` for transport-level failures.
+   * Machine-readable code. With `kind: 'api'`, the API's stable key, such as
+   * `emailSending.sendFailed`, `apiKeys.insufficientScopes` or
+   * `tooManyRequests`. With `kind: 'transport'`, one of
+   * `TRANSPORT_ERROR_CODES`.
    */
   readonly code: string;
-  /** Human-oriented detail when the API provided one. */
+  /**
+   * The API's sentence about this refusal, when it gave one. Never the
+   * HTTP status name.
+   */
   readonly description?: string;
   /**
    * Seconds to wait before trying again, from Retry-After. On a 429, until
@@ -31,9 +57,10 @@ export class SendHeronError extends Error {
    */
   readonly retryAfterSeconds?: number;
   /**
-   * The idempotency key the failed request carried (including an
+   * The idempotency key the failed send carried (including an
    * auto-generated one). Reuse it to resume the SAME logical send after the
-   * client has exhausted its retries: a fresh key could double-send.
+   * client has exhausted its retries: a fresh key could double-send. Only
+   * the three send routes carry one.
    */
   idempotencyKey?: string;
 
@@ -62,6 +89,8 @@ export class SendHeronError extends Error {
   }
 
   constructor(options: {
+    /** Derived from `code` when left out. */
+    kind?: 'api' | 'transport';
     statusCode: number | null;
     code: string;
     message?: string;
@@ -70,6 +99,11 @@ export class SendHeronError extends Error {
   }) {
     super(options.message ?? options.code);
     this.name = 'SendHeronError';
+    this.kind =
+      options.kind ??
+      ((TRANSPORT_ERROR_CODES as readonly string[]).includes(options.code)
+        ? 'transport'
+        : 'api');
     this.statusCode = options.statusCode;
     this.code = options.code;
     this.description = options.description;

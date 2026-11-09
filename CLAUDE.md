@@ -27,8 +27,8 @@ source (MIT). Everything committed here is world-readable, and the shipped
 
 - `{ data, error }` results; API failures are NEVER thrown. The only throw
   is constructing without an API key.
-- A 201 is an outcome: `status: 'sent' | 'suppressed'`. Suppressed is data,
-  never an error, never retried.
+- A 201 is an outcome: `status: 'SENT' | 'SUPPRESSED'`, or `'QUEUED'` with
+  a `holdReason`. Suppressed and held are data, never errors, never retried.
 - Retry policy: 429 retries on every method honoring Retry-After (30s wait
   cap; beyond it the error surfaces at once with `retryAfterSeconds`
   instead of burning attempts or sleeping for minutes); 5xx, timeouts and
@@ -56,9 +56,13 @@ source (MIT). Everything committed here is world-readable, and the shipped
 `https://api.sendheron.com/api/docs-json` (the backend commits the same
 document as `docs/openapi.json`). `pnpm spec:check` fails when the live
 contract differs; CI runs it on every PR and weekly. When it fires: read the
-diff, update `src/types.ts` and any touched resource, extend tests, then
-`pnpm spec:update` in the same PR. `test/contract.test.ts` must list every
-path the SDK calls.
+diff, run `pnpm spec:update` (it rewrites the snapshot and regenerates
+`src/generated.ts`, every request and response type, from it), fix what
+`pnpm typecheck` and the tests then flag in `src/types.ts` and the
+resources, and extend tests, all in the same PR. Never edit
+`src/generated.ts` by hand: `scripts/gen-types.mjs` owns it, and a test
+fails when it is stale. A route the SDK starts calling goes into the
+generator's `SDK_ROUTES`, `test/contract.test.ts` and `test/types.test.ts`.
 
 ## Gates
 

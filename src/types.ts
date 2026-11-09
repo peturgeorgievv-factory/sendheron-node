@@ -1,37 +1,52 @@
 /**
- * Contract types for the SendHeron API, pinned by the committed OpenAPI
- * snapshot in spec/.
+ * What the SDK adds to the generated contract (generated.ts): names for the
+ * enums the API document declares inline, the lists and helpers integrators
+ * branch on, and the send payloads that take a Date. Every request and
+ * response shape comes from the document; tests hold these lists to it.
  */
+import type {
+  DroppedRecipientResponse,
+  PlanPositionResponse,
+  Routes,
+  SendEmailRequest,
+  SendRecordResponse,
+  SendTemplateEmailRequest,
+  SuppressionCheckResponse,
+  SuppressionEntryResponse,
+  TemplateResponse,
+  WarmupUsageResponse,
+} from './generated.js';
 
 /** A template's declared type. Decides suppression and unsubscribe behavior. */
-export type EmailType = 'MARKETING' | 'TRANSACTIONAL';
+export type EmailType = TemplateResponse['emailType'];
 
-/** Reputation/metrics stream a message went out on. */
-export type SendStream = 'MARKETING' | 'TRANSACTIONAL';
+/** The reputation stream a message goes out on. */
+export type SendStream = NonNullable<SendRecordResponse['stream']>;
 
 /**
- * Lifecycle of one send. `suppressed` is an OUTCOME, not an error: the
- * compliance gate refused the send and recorded why: never retry those.
- * `queued` with a `holdReason` is a held send (`isHeld`): it waits for daily
- * capacity, a new sender's warm-up or an import's checked first sends, and
- * goes out by itself, so never retry those either.
- * `opened` and `clicked` mean a person opened or clicked. A send that only
- * machines touched (security scanners, link checkers, a privacy proxy
- * fetching the pixel) reads `delivered`: their events still prove delivery.
+ * The send path behind a record: `TRANSACTIONAL_API` for `emails.send()`,
+ * `DIRECT` for `emails.sendTemplate()`, `BULK` for the recipients of
+ * `emails.sendBulk()`.
  */
-export type EmailSendStatus =
-  | 'queued'
-  | 'sent'
-  | 'delivered'
-  | 'opened'
-  | 'clicked'
-  | 'bounced'
-  | 'failed'
-  | 'suppressed';
+export type SendChannel = NonNullable<SendRecordResponse['channel']>;
+
+/**
+ * Lifecycle of one send. `SUPPRESSED` is an OUTCOME, not an error: the
+ * compliance gate refused the send and recorded why, so never retry it.
+ * `QUEUED` with a `holdReason` is a held send (`isHeld`): it waits for daily
+ * capacity, a new sender's warm-up or an import's checked first sends, and
+ * goes out by itself, so never retry it either. `SCHEDULED` is a send with
+ * `sendAt` that has not fired, and `CANCELLED` one cancelled before it did.
+ * `OPENED` and `CLICKED` mean a person opened or clicked. A send that only
+ * machines touched (security scanners, link checkers, a privacy proxy
+ * fetching the pixel) reads `DELIVERED`: their events still prove delivery.
+ */
+export type EmailSendStatus = SendRecordResponse['status'];
 
 /**
  * Why a send was refused. Carried in `errorMessage` when `status` is
- * `suppressed`. Stable, machine-readable values.
+ * `SUPPRESSED`, in a dropped copy's `reason`, and in a check's
+ * `blockReason`. Stable, machine-readable values.
  */
 export const SEND_BLOCK_REASONS = [
   'HARD_SUPPRESSED',
@@ -46,14 +61,14 @@ export const SEND_BLOCK_REASONS = [
   'SENDER_DOMAIN_UNVERIFIED_IN_WORKSPACE',
   'SENDER_NOT_CONFIGURED',
   'SENDER_UNDER_REVIEW',
-] as const;
+] as const satisfies readonly SendBlockReason[];
 
-export type SendBlockReason = (typeof SEND_BLOCK_REASONS)[number];
+export type SendBlockReason = DroppedRecipientResponse['reason'];
 
 /**
  * Refusals caused by the SENDING side: the workspace's own configuration or
- * state. These are your bugs/setup to fix (alert on them), not facts about
- * the recipient. `SENDER_UNDER_REVIEW` clears once the organization is
+ * state. These are your bugs or setup to fix (alert on them), not facts
+ * about the recipient. `SENDER_UNDER_REVIEW` clears once the organization is
  * approved as a sender: watch `plan.sendingReview` on `usage.get()`.
  */
 export const SENDER_SIDE_BLOCK_REASONS = [
@@ -84,15 +99,15 @@ export const RECIPIENT_BLOCK_REASONS = [
 
 /**
  * True when a suppressed send's `errorMessage` names a sender-side problem.
- * Unknown/future reasons return false (treated as recipient-side, the
- * never-retry direction) - update the SDK to pick up new groupings.
+ * Unknown or future reasons return false (treated as recipient-side, the
+ * never-retry direction): update the SDK to pick up new groupings.
  */
 export const isSenderSideBlock = (reason: string | null | undefined): boolean =>
   (SENDER_SIDE_BLOCK_REASONS as readonly string[]).includes(reason ?? '');
 
 /**
  * Why a send is waiting instead of going out now. Carried in `holdReason`
- * when `status` is `queued`. Waiting is not failing: the send goes out by
+ * when `status` is `QUEUED`. Waiting is not failing: the send goes out by
  * itself, on the same record, once the cause clears. Stable,
  * machine-readable values.
  *
@@ -123,417 +138,47 @@ export const SEND_HOLD_REASONS = [
   'WARMUP_SAMPLE_FAILED',
   'IMPORT_SAMPLE',
   'IMPORT_SAMPLE_FAILED',
-] as const;
+] as const satisfies readonly SendHoldReason[];
 
-export type SendHoldReason = (typeof SEND_HOLD_REASONS)[number];
-
-/**
- * A copy recipient (cc or bcc) the compliance gate refused, listed in a send
- * record's `droppedRecipients`. A recipient-side `reason` is a fact about
- * that address. A sender-side one (`isSenderSideBlock`), such as
- * `SENDER_UNDER_REVIEW` for an address outside a sandboxed organization's
- * own, is your setup.
- */
-export interface DroppedRecipient {
-  email: string;
-  reason: SendBlockReason;
-}
+export type SendHoldReason = NonNullable<SendRecordResponse['holdReason']>;
 
 /**
- * The send record every send route returns and `emails.get()` reads back.
- *
- * Opens and clicks count people: `openCount`, `clickCount`, the first and
- * last opened and clicked timestamps, and the `opened` and `clicked`
- * statuses. Machines are counted beside them, never in them. Counts land 5
- * to 15 s after the open or click. Engagement recorded before the API began
- * separating machines from people (2026-10-15) was not reclassified, so it
- * still includes machines.
- */
-export interface EmailSendRecord {
-  id: string;
-  to: string;
-  /** The RESOLVED sender: not necessarily what you passed. */
-  from: string | null;
-  /**
-   * The rendered subject. A templated send that was suppressed, or is still
-   * held, records the template's subject unrendered.
-   */
-  subject: string;
-  templateId?: string | null;
-  campaignId?: string | null;
-  sequenceStepId?: string | null;
-  /** The provider's message id. Persist it: delivery events correlate on it. */
-  providerMessageId?: string | null;
-  provider?: string | null;
-  stream?: SendStream | null;
-  status: EmailSendStatus;
-  /**
-   * When `status` is `suppressed`: a SendBlockReason value.
-   * When `failed`/`bounced`: what went wrong, in SendHeron's own words: a
-   * sentence, or a key such as `emailSending.sendFailed`. A bounce gets a
-   * sentence for its kind, not the receiving server's text. A send with
-   * attachments that could not wait (503 `emailSending.sendHeld`) records
-   * the SendHoldReason here.
-   */
-  errorMessage?: string | null;
-  /**
-   * Copy recipients (cc and bcc) the compliance gate refused: the message
-   * went to everyone else without them. Null or absent when none was
-   * dropped. A held send's copies are checked when it goes out.
-   */
-  droppedRecipients?: DroppedRecipient[] | null;
-  /**
-   * Why the send is waiting (status `queued`): see SEND_HOLD_REASONS and
-   * `isHeld`. It is tried again at `heldUntil`, goes out by itself on this
-   * record, and is cleared when it does. Null or absent when nothing is
-   * waiting.
-   */
-  holdReason?: SendHoldReason | null;
-  /**
-   * When a held send is next tried, ISO-8601. It can be held again then,
-   * with a later `heldUntil`. Null or absent when nothing is waiting.
-   */
-  heldUntil?: string | null;
-  /**
-   * True when the send counted in a new sender's warm-up slice: the
-   * organization had never mailed this address. A held send reads false
-   * until it goes.
-   */
-  warmupFirstContact: boolean;
-  /**
-   * The import whose checked slice this send belongs to, or waits for
-   * (`IMPORT_SAMPLE`, `IMPORT_SAMPLE_FAILED`): a first send to a contact from
-   * an import whose people were last mailed over a year ago. Such a send
-   * reads `warmupFirstContact` false. Null or absent on every other send.
-   */
-  contactImportId?: string | null;
-  organizationId: string;
-  workspaceId: string;
-  sentAt?: string | null;
-  deliveredAt?: string | null;
-  complainedAt?: string | null;
-  firstOpenedAt?: string | null;
-  lastOpenedAt?: string | null;
-  /** Opens by people. */
-  openCount: number;
-  firstClickedAt?: string | null;
-  lastClickedAt?: string | null;
-  /** Clicks by people. */
-  clickCount: number;
-  /**
-   * Opens by security scanners, link checkers and HEAD or prefetch
-   * requests.
-   */
-  machineOpenCount: number;
-  /**
-   * Clicks by security scanners, link checkers and HEAD or prefetch
-   * requests.
-   */
-  machineClickCount: number;
-  /**
-   * Pixel fetches by a mail privacy proxy (Apple Mail Privacy Protection):
-   * maybe a reader, maybe nobody.
-   */
-  unconfirmedOpenCount: number;
-  createdAt?: string;
-}
-
-/**
- * True when a send is held: status `queued` with a `holdReason`. It waits
+ * True when a send is held: status `QUEUED` with a `holdReason`. It waits
  * for daily capacity, a new sender's warm-up or an import's checked first
- * sends, and goes out by itself, on the same record (`emails.get(id)`
- * reads its outcome once it has gone).
- * Never retry it: a new idempotency key would send it twice, and the same
- * key replays the held response. Any `holdReason` counts, including one
- * this SDK version does not know yet: it is waiting all the same.
+ * sends, and goes out by itself, on the same record (`emails.get(id)` reads
+ * its outcome once it has gone). Never retry it: a new idempotency key
+ * would send it twice, and the same key replays the held response. Any
+ * `holdReason` counts, including one this SDK version does not know yet:
+ * it is waiting all the same.
  */
 export const isHeld = <
   T extends { status: string; holdReason?: string | null },
 >(
   record: T,
-): record is T & { status: 'queued'; holdReason: string } =>
-  record.status === 'queued' && !!record.holdReason;
-
-export type ScheduledEmailStatus =
-  | 'SCHEDULED'
-  | 'DISPATCHING'
-  | 'SENT'
-  | 'CANCELLED'
-  | 'SUPPRESSED'
-  | 'FAILED';
+): record is T & { status: 'QUEUED'; holdReason: string } =>
+  record.status === 'QUEUED' && !!record.holdReason;
 
 /**
- * Returned when a send carries `sendAt`, and by `emails.cancelScheduled()`.
- * Its `id` is for `emails.cancelScheduled()`, not for `emails.get()`.
+ * Why an address is suppressed. `BOUNCE` and `COMPLAINT` are recorded by the
+ * platform from provider events; `MANUAL` and `ADMIN` are set by hand, and
+ * `ONE_CLICK` by the recipient.
  */
-export interface ScheduledEmail {
-  id: string;
-  to: string;
-  cc?: string[] | null;
-  bcc?: string[] | null;
-  from?: string | null;
-  fromName?: string | null;
-  replyTo?: string | null;
-  /** Raw sends: the full subject. Templated: the optional override, or null. */
-  subject?: string | null;
-  /** Raw sends only; templated rows render at fire time. */
-  html?: string | null;
-  templateId?: string | null;
-  contactId?: string | null;
-  sendAt: string;
-  status: ScheduledEmailStatus;
-  /**
-   * Set once it fires: the send record carrying the outcome. A send held
-   * when it fires is `SCHEDULED` again at a later `sendAt`, and its record
-   * reads `queued` with a `holdReason` meanwhile.
-   */
-  emailSendLogId?: string | null;
-  errorMessage?: string | null;
-  organizationId: string;
-  workspaceId: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
+export type SuppressionReason = SuppressionEntryResponse['reason'];
 
 /**
- * Pass-through attachment (SendGrid-compatible shape). Transactional sends
- * only; max 10 per message, 10 MB decoded total, allowlisted MIME types.
- * Bytes are never stored server-side and are excluded from the idempotency
- * fingerprint: a retried request with a regenerated file replays instead of
- * conflicting.
+ * `HARD` (a bounce or complaint) blocks every stream, transactional
+ * included, in every workspace of the account. `CONSENT` blocks marketing
+ * only, in its own workspace.
  */
-export interface Attachment {
-  /** Base64-encoded file content. */
-  content: string;
-  filename: string;
-  /** MIME type, e.g. `application/pdf`. */
-  type: string;
-  /** Only `"attachment"` is supported. */
-  disposition?: 'attachment';
-}
+export type SuppressionTier = SuppressionEntryResponse['tier'];
 
-export interface SendEmailPayload {
-  to: string;
-  subject: string;
-  html: string;
-  /**
-   * Defaults to the workspace's default sender identity. With no identity
-   * configured, the send is suppressed with `SENDER_NOT_CONFIGURED`.
-   */
-  from?: string;
-  /**
-   * Display-name override. Max 100 chars; no CR/LF or angle brackets. Any
-   * script works: it is encoded for the header. Without one, the sender
-   * identity's name; without that, the bare address.
-   */
-  fromName?: string;
-  replyTo?: string;
-  /**
-   * At most 50 recipients per message in total, `to` included: more is a
-   * 400 `emailSending.tooManyRecipients`. Each copy is suppression-checked;
-   * a refused one is dropped, the message goes without it, and the send
-   * record lists it in `droppedRecipients`.
-   */
-  cc?: string[];
-  /** Counts toward the same 50, and is checked and dropped like `cc`. */
-  bcc?: string[];
-  /**
-   * Custom headers, printable ASCII only: a name of at most 126 characters
-   * and a value of at most 995, both together at most 996. Anything else is
-   * a 400 (`emailSending.invalidHeaderName`, `invalidHeaderValue`,
-   * `headerValueTooLong`), and so is a header the platform owns
-   * (List-Unsubscribe, authentication, envelope:
-   * `emailSending.protectedHeader`).
-   */
-  headers?: Record<string, string>;
-  /** Schedule for later. Not combinable with attachments. */
-  sendAt?: Date | string;
-  attachments?: Attachment[];
-}
+/** What recorded a suppression. */
+export type SuppressionSource = NonNullable<SuppressionEntryResponse['source']>;
 
-export interface SendTemplatePayload {
-  to: string;
-  templateId: string;
-  /** Render variables. `contact.*` is auto-populated when contactId is set. */
-  variables?: Record<string, unknown>;
-  /**
-   * Populates `contact.firstName`, `contact.lastName`, `contact.email` and
-   * each custom property as `contact.<key>`. For a MARKETING template it
-   * also decides whose unsubscribe link the mail carries; transactional
-   * mail carries none.
-   */
-  contactId?: string;
-  /** Subject override (same template syntax). */
-  subject?: string;
-  /**
-   * Defaults to the workspace's default sender identity. With no identity
-   * configured, the send is suppressed with `SENDER_NOT_CONFIGURED`.
-   */
-  from?: string;
-  /**
-   * Display-name override, as on `SendEmailPayload`: without one, the
-   * sender identity's name; without that, the bare address.
-   */
-  fromName?: string;
-  replyTo?: string;
-  /**
-   * At most 50 recipients per message in total, `to` included (a 400
-   * `emailSending.tooManyRecipients`, also when scheduling). Refused copies
-   * are dropped and listed in the send record's `droppedRecipients`.
-   */
-  cc?: string[];
-  bcc?: string[];
-  /** Schedule for later; rendering and every gate run at fire time. */
-  sendAt?: Date | string;
-  /** Requires a TRANSACTIONAL template. */
-  attachments?: Attachment[];
-}
-
-export interface SendBulkPayload {
-  templateId: string;
-  /**
-   * Defaults to the workspace's default sender identity. With no identity
-   * configured, every send is suppressed with `SENDER_NOT_CONFIGURED`.
-   */
-  from?: string;
-  /**
-   * Template variables rendered into EVERY recipient's real mail, not
-   * preview-only data. `contact.*` is set per recipient on top.
-   */
-  sampleData?: Record<string, unknown>;
-  listId?: string;
-  contactIds?: string[];
-  /** Every subscribed contact in the API key's workspace. */
-  sendToAll?: boolean;
-}
-
-export interface SendBulkResult {
-  batchId: string | null;
-  totalRecipients: number;
-  queued: number;
-  blocked: number;
-}
-
-export interface Template {
-  id: string;
-  name: string;
-  subject: string;
-  /**
-   * Preview text: the line inboxes show after the subject. Every send of
-   * the template carries it as a hidden preheader at the top of the body.
-   * Null when the template has none. Never part of `bodyHtml`: it is added
-   * when a message is rendered.
-   */
-  previewText: string | null;
-  bodyHtml: string;
-  document?: Record<string, unknown> | null;
-  bodyMjml?: string | null;
-  emailType: EmailType;
-  variables?: string[] | null;
-  organizationId: string;
-  workspaceId: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateTemplatePayload {
-  name: string;
-  subject: string;
-  /**
-   * Preview text: the line inboxes show after the subject, sent as a hidden
-   * preheader at the top of the body. Supports Handlebars variables.
-   * Whitespace is collapsed to one line; blank means none. At most 200
-   * characters after that, merge tags counted as written: longer is a 400
-   * `templates.previewTextTooLong`, never truncated.
-   */
-  previewText?: string;
-  /** Exactly one of bodyHtml / document. */
-  bodyHtml?: string;
-  document?: Record<string, unknown>;
-  bodyMjml?: string;
-  /** Required: the type decides suppression and unsubscribe behavior. */
-  emailType: EmailType;
-  tagIds?: string[];
-}
-
-export interface UpdateTemplatePayload {
-  name?: string;
-  subject?: string;
-  /**
-   * Preview text, the line inboxes show after the subject (hidden
-   * preheader). Omit to keep it; null or an empty string removes it. At
-   * most 200 characters (400 `templates.previewTextTooLong`).
-   */
-  previewText?: string | null;
-  bodyHtml?: string;
-  /** Object: recompile from blocks. Explicit null: eject to raw HTML. */
-  document?: Record<string, unknown> | null;
-  bodyMjml?: string;
-  emailType?: EmailType;
-  /** Required whenever emailType actually changes. */
-  confirmEmailTypeChange?: boolean;
-  tagIds?: string[];
-}
-
-export interface PreviewTemplatePayload {
-  /** Exactly one of bodyHtml / document. */
-  bodyHtml?: string;
-  document?: Record<string, unknown>;
-  emailType?: EmailType;
-  /**
-   * Channel to preview through. `CAMPAIGN` and `BULK` are always marketing,
-   * whatever the template says; `TRANSACTIONAL_API` and `CAMPAIGN_TEST` are
-   * always transactional; `SEQUENCE` and `DIRECT` follow the template.
-   */
-  channel?: string;
-  sampleData?: Record<string, unknown>;
-  /** Subject to render with sampleData; returned as `renderedSubject`. */
-  subject?: string;
-  /**
-   * Preview text to render with sampleData. It is placed in `renderedHtml`
-   * as the hidden preheader, returned as `renderedPreviewText`, and counted
-   * by the size check. At most 200 characters, like a saved template's
-   * (400 `templates.previewTextTooLong`).
-   */
-  previewText?: string;
-}
-
-export interface TemplatePreview {
-  /** Composed exactly as a real send composes it. */
-  renderedHtml: string;
-  /** The subject as the recipient gets it; null when no subject was given. */
-  renderedSubject: string | null;
-  /**
-   * The preview text as the inbox shows it, merge tags rendered; null when
-   * there is none. Also in `renderedHtml`, as the hidden preheader.
-   */
-  renderedPreviewText: string | null;
-  injectedUnsubscribeFooter: boolean;
-  hasUnrecognizedUnsubscribeLink: boolean;
-  appendedPromoBadge: boolean;
-  /**
-   * The template references {{unsubscribe_url}} but its policy never
-   * supplies it: the link renders EMPTY in a real send.
-   */
-  unsubscribeVariableIgnored: boolean;
-}
-
-export type SuppressionTier = 'HARD' | 'CONSENT';
-
-export interface SuppressionEntry {
-  id: string;
-  email: string;
-  reason: string;
-  source: string;
-  workspaceId?: string | null;
-  note?: string | null;
-  createdAt?: string;
-}
-
-export interface ChannelDeliverability {
-  allowed: boolean;
-  blockReason: SendBlockReason | null;
-}
+/** A contact's status. Anything but `SUBSCRIBED` also gates sending. */
+export type ContactStatus = NonNullable<
+  SuppressionCheckResponse['contactStatus']
+>;
 
 /**
  * What address screening concluded about a contact, when it was created,
@@ -544,11 +189,9 @@ export interface ChannelDeliverability {
  * domain, a likely typo, a role or system mailbox) and `UNCHECKED` (DNS did
  * not answer in time) stay mailable.
  */
-export type ScreeningVerdict =
-  | 'VALID'
-  | 'RISKY'
-  | 'UNDELIVERABLE'
-  | 'UNCHECKED';
+export type ScreeningVerdict = NonNullable<
+  SuppressionCheckResponse['screeningVerdict']
+>;
 
 /**
  * One fact screening found about an address. A verdict can carry several,
@@ -582,74 +225,17 @@ export const SCREENING_REASONS = [
   'ROLE_ADDRESS',
   'SYSTEM_ADDRESS',
   'DNS_UNCHECKED',
-] as const;
+] as const satisfies readonly ScreeningReason[];
 
-export type ScreeningReason = (typeof SCREENING_REASONS)[number];
-
-/**
- * `suppressions.check()`: the recipient and organization verdict
- * (suppression tiers, contact status, address screening, sending pause).
- * Sender configuration, list opt-outs and an archived workspace are only
- * evaluated on a real send.
- */
-export interface EmailDeliverability {
-  email: string;
-  suppressed: boolean;
-  tier: SuppressionTier | null;
-  reason: string | null;
-  source: string | null;
-  suppressedAt: string | null;
-  note: string | null;
-  contactStatus: string | null;
-  /** The matching contact's screening verdict. Null without a screened contact. */
-  screeningVerdict: ScreeningVerdict | null;
-  /** The matching contact's screening reasons. Never null: empty without one. */
-  screeningReasons: ScreeningReason[];
-  /** The address with a likely domain typo fixed (`LIKELY_TYPO`), or null. */
-  suggestedEmail: string | null;
-  /**
-   * True when the address hard-bounced as nonexistent somewhere on the
-   * platform, in any organization. It is not one of your suppression
-   * entries, so `suppressed` can be false, yet mail to it is refused on
-   * every stream, transactional included.
-   */
-  knownHardBounce: boolean;
-  marketing: ChannelDeliverability;
-  transactional: ChannelDeliverability;
-}
+export type ScreeningReason =
+  SuppressionCheckResponse['screeningReasons'][number];
 
 /**
- * One signup through a form, from your server. No status, list, tag or
- * consent fields: the form decides those. A field it does not take is a 400.
+ * Whether the plan gates apply: `ACTIVE` (the plan caps apply), `LAPSED`
+ * (no live subscription: growth is refused, transactional mail is bounded
+ * by a small grace) or `UNLIMITED`.
  */
-export interface FormSignupPayload {
-  /** Gets the confirmation email; nothing happens until its owner confirms. Max 254 characters. */
-  email: string;
-  /**
-   * The visitor's IP address as your server saw it: behind Cloudflare the
-   * `CF-Connecting-IP` header, never an `X-Forwarded-For` value the visitor
-   * can write. Kept on the consent record, and counted toward the
-   * per-visitor limit.
-   */
-  ipAddress: string;
-  /** Kept only when the form shows the field; required when the form requires it. Max 100 characters. */
-  firstName?: string | undefined;
-  /** Kept only when the form shows the field; required when the form requires it. Max 100 characters. */
-  lastName?: string | undefined;
-  /** The visitor's User-Agent header, kept on the consent record. Max 512 characters. */
-  userAgent?: string | undefined;
-}
-
-/**
- * The same for every address: new, already waiting for its confirmation,
- * already subscribed, or one SendHeron will not mail. Show the visitor
- * "check your inbox" and nothing more.
- */
-export interface FormSignupAccepted {
-  status: 'accepted';
-}
-
-export type PlanGateStatus = 'ACTIVE' | 'LAPSED' | 'UNLIMITED';
+export type PlanGateStatus = PlanPositionResponse['status'];
 
 /**
  * Why the plan gates treat an organization as LAPSED. Four different things
@@ -658,34 +244,18 @@ export type PlanGateStatus = 'ACTIVE' | 'LAPSED' | 'UNLIMITED';
  * no grace either: `monthlySends.pool` is 0 and every send is refused. A
  * customer who has paid before keeps the transactional grace through dunning.
  */
-export type LapsedReason =
-  | 'NEVER_SUBSCRIBED'
-  | 'TRIAL_EXPIRED'
-  | 'PAYMENT_FAILED'
-  | 'CANCELED';
+export type LapsedReason = NonNullable<PlanPositionResponse['lapsedReason']>;
 
 /**
  * Where the organization stands with its sender review. Until `APPROVED`,
  * mail reaches only its verified members (members who confirmed their email
- * address) and addresses on its own verified domains: every other send,
- * an unverified member included, is suppressed with `SENDER_UNDER_REVIEW`, on
+ * address) and addresses on its own verified domains: every other send, an
+ * unverified member included, is suppressed with `SENDER_UNDER_REVIEW`, on
  * every endpoint, transactional included. `SANDBOX`: no review requested
  * yet. `REQUESTED`: the organization owner asked for it and it is not
  * approved yet; same reach as `SANDBOX`. `APPROVED`: the sandbox is lifted.
  */
-export type SendingReviewStatus = 'SANDBOX' | 'REQUESTED' | 'APPROVED';
-
-/**
- * One plan cap's position. `remaining` never goes below 0, so `used` can
- * sit above `cap`, after a lapse for instance.
- */
-export interface CountUsage {
-  used: number;
-  /** Null without an active subscription cap; 0 when LAPSED. */
-  cap: number | null;
-  /** How many more fit. Null without an active subscription cap. */
-  remaining: number | null;
-}
+export type SendingReviewStatus = PlanPositionResponse['sendingReview'];
 
 /**
  * The new-sender warm-up. `WARMING`: mail to addresses the organization has
@@ -695,156 +265,38 @@ export interface CountUsage {
  * once `plan.sendingReview` is `APPROVED`: before that, the review sandbox
  * decides who can be reached.
  */
-export type WarmupStatus = 'WARMING' | 'HELD' | 'COMPLETE';
-
-export interface WarmupUsage {
-  status: WarmupStatus;
-  /** When warm-up completed, ISO-8601. Null until it has. */
-  completedAt: string | null;
-  /** Never-mailed addresses each stream may have waiting for their check. */
-  sampleSize: number;
-  /** The streams whose new-address mail waits for a person (`HELD`). */
-  heldStreams: SendStream[];
-}
+export type WarmupStatus = WarmupUsageResponse['status'];
 
 /**
- * The organization's place in the shared rolling 24-hour sending quota.
- * Counts are recipients (to, cc and bcc). Not a plan cap: mail over a line
- * waits as a held send (`isHeld`) and goes out by itself.
+ * `emails.send()`'s payload: the API's, with `sendAt` also taking a Date.
  */
-export interface SendingCapacityUsage {
+export type SendEmailPayload = Omit<SendEmailRequest, 'sendAt'> & {
   /**
-   * Recipients sent in the rolling 24 hours, both streams. Null when
-   * unreadable.
+   * Schedule the send: a Date, or an ISO-8601 string. The answer is the send
+   * record with status `SCHEDULED` and `scheduledAt`; `emails.get(id)` reads
+   * it, and `emails.cancelScheduled(id)` cancels it until it fires. Not
+   * combinable with attachments.
    */
-  last24Hours: number | null;
-  /** The transactional part of `last24Hours`. Null when unreadable. */
-  transactionalLast24Hours: number | null;
-  /**
-   * The most of the shared quota one organization may take. Null when the
-   * quota is unlimited.
-   */
-  share: number | null;
-  /**
-   * The daily volume the organization has proven it sends cleanly:
-   * marketing above it waits.
-   */
-  earnedVolume: number;
-  /** Marketing recipients that still fit right now. Null when unreadable. */
-  marketingRemaining: number | null;
-  /**
-   * The platform reached its daily marketing line: everyone's marketing
-   * waits for the window.
-   */
-  platformMarketingHeld: boolean;
-  /** Sends waiting now (status `queued` with a `holdReason`). */
-  held: number;
-  warmup: WarmupUsage;
-}
+  sendAt?: Date | string;
+};
 
 /**
- * The signup forms of the API key's workspace: the one workspace-scoped
- * block of the usage, since forms and their cap are per workspace.
+ * `emails.sendTemplate()`'s payload: the API's, with `sendAt` also taking a
+ * Date.
  */
-export interface SignupFormsUsage {
+export type SendTemplatePayload = Omit<SendTemplateEmailRequest, 'sendAt'> & {
   /**
-   * Forms in this workspace against the per-workspace cap, which is the same
-   * on every plan: unlike the plan caps, `cap` and `remaining` are never
-   * null here.
+   * Schedule the send: a Date, or an ISO-8601 string. Rendering and every
+   * gate run when it fires. The answer is the send record with status
+   * `SCHEDULED` and `scheduledAt`; `emails.cancelScheduled(id)` cancels it
+   * until then.
    */
-  forms: CountUsage;
-  /** Signups waiting for their confirmation click, not yet expired. */
-  pendingSignups: number;
-  /** Signups that became subscribed contacts in the last 30 days. */
-  confirmedLast30Days: number;
-  /** Forms under attack right now: held to a trickle, every signup double opt-in. */
-  underAttack: number;
-}
+  sendAt?: Date | string;
+};
 
-export interface OrganizationUsage {
-  plan: {
-    status: PlanGateStatus;
-    name: string | null;
-    /**
-     * When the running trial ends, ISO-8601. Null once the plan is paid, and
-     * when there is no trial. The trial ceilings apply until this instant.
-     */
-    trialEndsAt: string | null;
-    /** Why the plan is LAPSED. Null for every other status. */
-    lapsedReason: LapsedReason | null;
-    /**
-     * The sender review. Never null. Until `APPROVED`, a send to anyone
-     * outside your verified members and your own verified domains is
-     * suppressed with `SENDER_UNDER_REVIEW`.
-     */
-    sendingReview: SendingReviewStatus;
-  };
-  monthlySends: {
-    used: number;
-    /** Null without an active subscription cap. */
-    pool: number | null;
-    marketingRemaining: number | null;
-    transactionalCeiling: number | null;
-    transactionalRemaining: number | null;
-    resetsAt: string;
-  };
-  /** The contact cap, which counts SUBSCRIBED contacts only. */
-  contacts: {
-    subscribed: number;
-    /** Null without an active subscription cap; 0 when LAPSED. */
-    cap: number | null;
-    /** How many more contacts fit. Null without an active subscription cap. */
-    remaining: number | null;
-  };
-  /**
-   * Sending domains, in any verification state, counted once however many
-   * workspaces share one. A running trial can lower the cap.
-   */
-  domains: CountUsage;
-  /**
-   * Live workspaces: archived ones do not count. `cap` is the plan's, or a
-   * per-organization override when one is set.
-   */
-  workspaces: CountUsage;
-  /** Team members, pending invitations included: an invitation holds a seat. */
-  teamMembers: CountUsage;
-  /**
-   * The rolling 24-hour position on the shared sending quota, and the
-   * new-sender warm-up. Null when the position cannot be reported.
-   */
-  sending: SendingCapacityUsage | null;
-  /** The signup forms of the API key's workspace. Never null. */
-  signupForms: SignupFormsUsage;
-  rateLimits: {
-    perKeyPerMinute: number;
-    organizationPerMinute: {
-      READ: number;
-      WRITE: number;
-      SEND: number;
-    };
-  };
-}
+/** `templates.list()`'s filters and page. `page` is zero-based. */
+export type ListTemplatesParams = Routes['GET /api/v1/templates']['query'];
 
-export interface PaginatedResult<T> {
-  data: T[];
-  totalCount?: number;
-  pageInfo?: Record<string, unknown>;
-}
-
-export interface ListTemplatesParams {
-  /** 0-based. */
-  page?: number;
-  limit?: number;
-  term?: string;
-  emailType?: EmailType;
-}
-
-export interface ListSuppressionsParams {
-  /** 0-based. */
-  page?: number;
-  limit?: number;
-  email?: string;
-  reason?: string;
-  tier?: SuppressionTier;
-  source?: string;
-}
+/** `suppressions.list()`'s filters and page. `page` is zero-based. */
+export type ListSuppressionsParams =
+  Routes['GET /api/v1/suppressions']['query'];

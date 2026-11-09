@@ -21,12 +21,14 @@ export interface ClientOptions {
 
 export interface RequestOptions {
   /**
-   * Idempotency key for the email send routes. One is auto-generated when
+   * Idempotency key for the three send routes (`emails.send`,
+   * `emails.sendTemplate`, `emails.sendBulk`), the only ones the API
+   * deduplicates; anywhere else it is not sent. One is auto-generated when
    * absent and reused across the client's internal retries, so a timeout
    * cannot double-send. Supply your own to deduplicate across YOUR retries
-   * too; after the client gives up, the key it used is on `error.idempotencyKey`.
-   * Keys are scoped to the API key's workspace and the endpoint, and expire
-   * after 24 hours.
+   * too; after the client gives up, the key it used is on
+   * `error.idempotencyKey`. Keys are scoped to the API key's workspace and
+   * the endpoint, and expire after 24 hours.
    */
   idempotencyKey?: string;
   signal?: AbortSignal;
@@ -34,10 +36,12 @@ export interface RequestOptions {
   maxRetries?: number;
 }
 
+type QueryValue = string | number | boolean | readonly string[] | undefined;
+
 interface InternalRequest {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;
-  query?: Record<string, string | number | undefined>;
+  query?: Record<string, QueryValue>;
   body?: unknown;
   options?: RequestOptions;
 }
@@ -46,8 +50,12 @@ const DEFAULT_BASE_URL = 'https://api.sendheron.com';
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_TIMEOUT_MS = 60_000;
 const IDEMPOTENCY_HEADER = 'idempotency-key';
-/** The server implements idempotency on these routes only. */
-const IDEMPOTENT_PATH_PREFIX = '/api/v1/emails/';
+/** The routes the API deduplicates by idempotency key: the three sends. */
+const IDEMPOTENT_SEND_PATHS = new Set([
+  '/api/v1/emails/send',
+  '/api/v1/emails/send-template',
+  '/api/v1/emails/send-bulk',
+]);
 const RETRYABLE_STATUSES = new Set([500, 502, 503, 504]);
 const BACKOFF_BASE_MS = 400;
 const BACKOFF_CAP_MS = 5_000;
@@ -68,9 +76,23 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 const abortedError = () =>
   new SendHeronError({
+    kind: 'transport',
     statusCode: null,
     code: 'aborted',
     message: 'The request was aborted by the caller.',
+  });
+
+const invalidResponse = (
+  status: number,
+  detail: string,
+  retryAfterSeconds?: number,
+) =>
+  new SendHeronError({
+    kind: 'transport',
+    statusCode: status,
+    code: 'invalid_response',
+    message: `HTTP ${status}: ${detail}`,
+    retryAfterSeconds,
   });
 
 export class HttpClient {
@@ -110,20 +132,18 @@ export class HttpClient {
     );
 
     // Minted ONCE, before the retry loop, so every internal attempt replays
-    // the same logical request instead of sending a new email.
-    const idempotencyKey =
-      req.options?.idempotencyKey ??
-      (req.method === 'POST' && req.path.startsWith(IDEMPOTENT_PATH_PREFIX)
-        ? randomUUID()
-        : undefined);
+    // the same logical request instead of sending a new email. Only the
+    // three sends carry one: the API serves every other route fresh, so a
+    // key there would promise a replay that never happens.
+    const isSend = req.method === 'POST' && IDEMPOTENT_SEND_PATHS.has(req.path);
+    const idempotencyKey = isSend
+      ? (req.options?.idempotencyKey ?? randomUUID())
+      : undefined;
 
-    // 5xx/network retries are safe for reads, and for writes the server can
-    // deduplicate. A key on a route the server ignores it for must not arm
-    // retries: that is how duplicate templates get created.
-    const safeForReplay =
-      req.method === 'GET' ||
-      (idempotencyKey !== undefined &&
-        req.path.startsWith(IDEMPOTENT_PATH_PREFIX));
+    // 5xx/network retries are safe for reads, and for the sends the server
+    // deduplicates. No other write is replayed: that is how duplicate
+    // templates get created.
+    const safeForReplay = req.method === 'GET' || isSend;
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
@@ -140,6 +160,7 @@ export class HttpClient {
     });
 
     let lastError = new SendHeronError({
+      kind: 'transport',
       statusCode: null,
       code: 'network_error',
       message: 'The request was never attempted.',
@@ -173,6 +194,7 @@ export class HttpClient {
         }
 
         lastError = new SendHeronError({
+          kind: 'transport',
           statusCode: response?.status ?? null,
           code: attemptController.signal.aborted ? 'timeout' : 'network_error',
           message: this.describeTransportError(cause),
@@ -189,8 +211,11 @@ export class HttpClient {
       }
 
       if (response.ok) {
+        // Every route answers a JSON body, so an empty one is a broken
+        // answer, never `data`: typing it as T would hand callers a null
+        // they were promised could not happen.
         if (!bodyText) {
-          return { data: null as T, error: null };
+          return fail(invalidResponse(response.status, 'empty body'));
         }
         try {
           return { data: JSON.parse(bodyText) as T, error: null };
@@ -198,13 +223,7 @@ export class HttpClient {
           // A 2xx whose body is not our JSON (a proxy page, a truncation
           // that kept Content-Length honest) is a broken response, not a
           // crash in the consumer's process.
-          return fail(
-            new SendHeronError({
-              statusCode: response.status,
-              code: 'invalid_response',
-              message: `HTTP ${response.status}: ${bodyText.slice(0, 200)}`,
-            }),
-          );
+          return fail(invalidResponse(response.status, bodyText.slice(0, 200)));
         }
       }
 
@@ -234,7 +253,7 @@ export class HttpClient {
 
   get<T>(
     path: string,
-    query?: Record<string, string | number | undefined>,
+    query?: Record<string, QueryValue>,
     options?: RequestOptions,
   ): Promise<Result<T>> {
     return this.request<T>({ method: 'GET', path, query, options });
@@ -256,12 +275,9 @@ export class HttpClient {
     return this.request<T>({ method: 'PATCH', path, body, options });
   }
 
-  delete<T>(
-    path: string,
-    body?: unknown,
-    options?: RequestOptions,
-  ): Promise<Result<T>> {
-    return this.request<T>({ method: 'DELETE', path, body, options });
+  /** No route takes a body on DELETE. */
+  delete<T>(path: string, options?: RequestOptions): Promise<Result<T>> {
+    return this.request<T>({ method: 'DELETE', path, options });
   }
 
   /**
@@ -324,13 +340,15 @@ export class HttpClient {
     return wait <= RETRY_AFTER_CAP_MS ? wait : null;
   }
 
-  private buildUrl(
-    path: string,
-    query?: Record<string, string | number | undefined>,
-  ): string {
+  private buildUrl(path: string, query?: Record<string, QueryValue>): string {
     const url = new URL(this.baseUrl + path);
     for (const [name, value] of Object.entries(query ?? {})) {
-      if (value !== undefined) {
+      if (Array.isArray(value)) {
+        // A list filter (`tagIds`) is the parameter repeated.
+        for (const item of value) {
+          url.searchParams.append(name, item);
+        }
+      } else if (value !== undefined) {
         url.searchParams.set(name, String(value));
       }
     }
@@ -372,35 +390,39 @@ export class HttpClient {
     return 'Network request failed';
   }
 
+  /**
+   * Every API refusal, a 429 included, is `{ statusCode, message, error,
+   * description? }`: `message` is the stable key, `error` only the HTTP
+   * status name, `description` the sentence when there is one. A body
+   * without a key is not the API's answer (an edge or proxy page), so it is
+   * a transport failure, never an API code.
+   */
   private toError(
     status: number,
     bodyText: string | null,
     retryAfterSeconds: number | undefined,
   ): SendHeronError {
+    let body: { message?: unknown; description?: unknown } | null = null;
     try {
-      const body = JSON.parse(bodyText ?? '') as {
-        message?: string;
-        error?: string;
-        description?: string;
-      };
-      // The API's 429 body carries a human sentence, not a stable key -
-      // normalize it so `code` stays machine-readable across statuses.
-      const code =
-        status === 429 ? 'rate_limited' : (body.message ?? 'unknown_error');
-      return new SendHeronError({
-        statusCode: status,
-        code,
-        message: body.message ?? `HTTP ${status}`,
-        description: body.description ?? body.error,
+      body = JSON.parse(bodyText ?? '');
+    } catch {}
+
+    if (typeof body?.message !== 'string' || body.message === '') {
+      return invalidResponse(
+        status,
+        (bodyText ?? '').slice(0, 200),
         retryAfterSeconds,
-      });
-    } catch {
-      return new SendHeronError({
-        statusCode: status,
-        code: 'invalid_response',
-        message: `HTTP ${status}: ${(bodyText ?? '').slice(0, 200)}`,
-        retryAfterSeconds,
-      });
+      );
     }
+
+    return new SendHeronError({
+      kind: 'api',
+      statusCode: status,
+      code: body.message,
+      message: body.message,
+      description:
+        typeof body.description === 'string' ? body.description : undefined,
+      retryAfterSeconds,
+    });
   }
 }

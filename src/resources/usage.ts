@@ -1,6 +1,6 @@
 import type { HttpClient, RequestOptions } from '../client.js';
 import type { Result } from '../errors.js';
-import type { OrganizationUsage } from '../types.js';
+import type { UsageResponse } from '../generated.js';
 
 export class Usage {
   constructor(private readonly client: HttpClient) {}
@@ -22,7 +22,7 @@ export class Usage {
    * the last 30 days, and forms under attack right now. Pool and plan-cap
    * numbers are null for organizations without an active subscription cap.
    */
-  get(options?: RequestOptions): Promise<Result<OrganizationUsage>> {
+  get(options?: RequestOptions): Promise<Result<UsageResponse>> {
     return this.client.get('/api/v1/usage', undefined, options);
   }
 }

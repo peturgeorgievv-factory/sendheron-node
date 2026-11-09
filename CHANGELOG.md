@@ -1,5 +1,105 @@
 # Changelog
 
+## 1.0.0
+
+The cleaned-up REST contract (backend #178), and the SDK's own breaks in
+the same major. The API changed on 2026-11-09, and 0.13.x reads its
+statuses, lists and errors wrongly, so upgrade.
+
+To upgrade:
+
+- Compare statuses and reasons in UPPER_SNAKE: `data.status === 'SENT'`,
+  `'SUPPRESSED'` or `'QUEUED'`, `suppressions.add({ reason: 'MANUAL' })`,
+  and a signup's `{ status: 'ACCEPTED' }`.
+- Rename the types in the table below; TypeScript points at every use.
+- Pass `variables`, not `sampleData`, to `emails.sendBulk()` and
+  `templates.preview()`.
+- Call `suppressions.remove(email)` without a body; every delete answers
+  `{ deleted: true }`.
+- Branch on `error.code === 'tooManyRequests'` where you had
+  `'rate_limited'`, and on `error.kind` to tell the API's keys from the
+  SDK's own codes.
+
+API changes from 2026-11-09:
+
+- Every state and reason is UPPER_SNAKE: the send `status` (`QUEUED`,
+  `SENT`, `DELIVERED`, `OPENED`, `CLICKED`, `BOUNCED`, `FAILED`,
+  `SUPPRESSED`, plus `SCHEDULED` and `CANCELLED`), a suppression's `reason`
+  (`MANUAL`, `ONE_CLICK`, `COMPLAINT`, `BOUNCE`, `ADMIN`), a contact's
+  status and the signup answer. The API still reads the old lowercase
+  spelling on input for one release; the SDK sends uppercase. An
+  attachment's `disposition` keeps `attachment`.
+- Every response is a declared shape: every field present, `null` when
+  empty, never absent. Gone from the wire: `organizationId` everywhere, and
+  on the send record `provider`, `warmupFirstContact`, `contactImportId` and
+  `signupFormId`. New on it: `channel`, `batchId` and `scheduledAt`.
+  Suppression rows carry `tier`, and a template carries its `tags` as
+  `{ id, name, color }`.
+- Every list answers one envelope, `{ data, totalCount, page, limit,
+  hasNextPage }`: `page` is the zero-based page asked for, counts are never
+  null, and `limit` defaults to 50 and stops at 100.
+- Every delete answers `{ deleted: true }` and takes no body:
+  `DELETE /api/v1/suppressions/{email}` lost its `note`.
+- A scheduled send answers the same send record, with `status: 'SCHEDULED'`
+  and `scheduledAt`, and `emails.get()` reads it. `emails.cancelScheduled()`
+  answers `{ deleted: true }`, and the record reads `CANCELLED`.
+- `sampleData` is `variables` on `POST /api/v1/emails/send-bulk` and
+  `POST /api/v1/templates/preview`. A bulk send naming more than one of
+  `listId`, `contactIds` and `sendToAll` is a `400`
+  `emailSending.oneAudienceSelector`.
+- A `429` is a refusal like every other: `message` is `tooManyRequests`,
+  the sentence is in `description`, and `Retry-After` is as before. A
+  malformed id is a `400` `invalidUUID` on every route, and the
+  idempotency key counts on the three send routes only.
+- Routes the SDK does not wrap changed too: sending domains and identities
+  answer the list envelope, and the bulk removals are
+  `POST /api/v1/sequences/{id}/enrollments/bulk-remove` and
+  `POST /api/v1/lists/{id}/contacts/bulk-remove`, answering
+  `{ removedIds, notFoundIds }`.
+
+SDK changes:
+
+- Every request and response type is generated from the API document
+  (`scripts/gen-types.mjs` writes `src/generated.ts`), named as the
+  document names it, and the hand-written ones are gone. The enum types
+  (`EmailSendStatus`, `SendBlockReason`, `SendHoldReason` and the rest)
+  read their values from it.
+- `error.kind` is `'api'` or `'transport'`, and `TRANSPORT_ERROR_CODES`
+  lists the SDK's own codes: `network_error`, `timeout`, `aborted` and
+  `invalid_response`.
+- `error.description` is the API's sentence or nothing, never the HTTP
+  status name.
+- An empty 2xx body is an `invalid_response` error, never `data: null`, and
+  so is an error body without the API's key, which read as
+  `unknown_error`.
+- A `429` carries the API's own `tooManyRequests`: `rate_limited` is gone.
+- The idempotency key goes on the three send routes only, a key you pass
+  included.
+- `emails.send()` and `emails.sendTemplate()` lost their scheduled
+  overloads: both answer `SendRecordResponse`.
+- `templates.list()` takes `tagIds`, sent as the parameter repeated.
+
+| 0.13 | 1.0 |
+| --- | --- |
+| `EmailSendRecord`, `ScheduledEmail` | `SendRecordResponse` |
+| `ScheduledEmailStatus` | `EmailSendStatus` |
+| `DroppedRecipient` | `DroppedRecipientResponse` |
+| `Attachment` | `EmailAttachmentRequest` |
+| `SendBulkPayload`, `SendBulkResult` | `SendBulkEmailRequest`, `BulkSendResponse` |
+| `Template`, `TemplatePreview` | `TemplateResponse`, `TemplatePreviewResponse` |
+| `CreateTemplatePayload`, `UpdateTemplatePayload`, `PreviewTemplatePayload` | `CreateTemplateRequest`, `UpdateTemplateRequest`, `PreviewTemplateRequest` |
+| `SuppressionEntry` | `SuppressionEntryResponse` |
+| `EmailDeliverability`, `ChannelDeliverability` | `SuppressionCheckResponse`, `ChannelDeliverabilityResponse` |
+| `FormSignupPayload`, `FormSignupAccepted` | `CreateFormSignupRequest`, `FormSignupAcceptedResponse` |
+| `OrganizationUsage` | `UsageResponse` |
+| `CountUsage`, `SendingCapacityUsage`, `WarmupUsage`, `SignupFormsUsage` | the same names ending in `Response` |
+| `PaginatedResult<T>` | `PaginatedResponse<T>` |
+
+The README and the doc comments say so. The tests pin `kind`, the `429`
+and the empty body, hold the block, hold and screening reason lists to the
+document, and pin every method to its route at compile time.
+`spec/openapi.json` is the live document.
+
 ## 0.13.1
 
 Docs: the From address description matches the API (a key never takes
