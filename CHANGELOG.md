@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.1
+
+Docs: the From address description matches the API (a key never takes
+another workspace's domain).
+
 ## 0.13.0
 
 Suppressions per workspace (backend #174). Breaking: `confirmHardTier`
