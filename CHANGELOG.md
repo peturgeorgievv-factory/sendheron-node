@@ -5,23 +5,27 @@
 Nothing in the SDK changed: every type and every call is what 1.0.0
 shipped, so upgrading needs no code change.
 
-API changes from later on 2026-11-09 (backend #181):
+API changes since 1.0.0 (backend #181 on 2026-11-09, #182 on 2026-11-10):
 
 - The API no longer reads the old lowercase spelling of an enum value: the
-  grace 1.0.0 described ended the same day. A lowercase `reason` in
-  `suppressions.add()` or `suppressions.list()` is now a `400`
-  `validationFailed` naming the allowed values, where the API used to
-  correct it. The SDK's types allow only the uppercase spelling, so typed
-  code never sent a lowercase one.
+  grace 1.0.0 described ended on 2026-11-09, the day it shipped. A
+  lowercase `reason` in `suppressions.add()` or `suppressions.list()` is
+  now a `400` `validationFailed` naming the allowed values, where the API
+  used to correct it. The SDK's types allow only the uppercase spelling,
+  so typed code never sent a lowercase one.
 - On routes the SDK does not wrap:
   `POST /api/v1/sequences/{id}/enrollments/bulk` names why it skipped a
   contact in `errors[].reason`, one of `CONTACT_NOT_FOUND`,
   `ALREADY_ENROLLED` and `CONTACT_SUPPRESSED`, in place of the sentence in
-  `errors[].message`. A list rule or a sequence condition on a contact's
-  `status`, `source` or `screeningVerdict` must carry one of that field's
-  values, and a sequence trigger's `source` filter one of the `source`
-  values: anything else is a `400`, `lists.invalidRuleValue` or
-  `sequences.invalidStepConfig`.
+  `errors[].message`. A list rule on a contact's `status` or `source`
+  takes only `EQUALS`, `NOT_EQUALS`, `IN`, `NOT_IN`, `IS_SET` and
+  `IS_NOT_SET`, with that field's own values; on any field, `IN` and
+  `NOT_IN` take a non-empty list and the other operators that take a value
+  take one (a `400` `lists.invalidRuleOperator` or
+  `lists.invalidRuleValue`; some of these shapes used to fail with a
+  `500`). A sequence condition on `status`, `source` or
+  `screeningVerdict`, and a sequence trigger's `source` filter, must carry
+  one of that field's values (a `400` `sequences.invalidStepConfig`).
 
 `spec/openapi.json` is the live document.
 

@@ -6165,7 +6165,7 @@
           },
           "rules": {
             "type": "object",
-            "description": "Who a dynamic list contains, evaluated every time it is read. Required when `type` is dynamic, cleared when it is static.\nA group is {\"type\": \"group\", \"logic\": AND | OR, \"rules\": [...]} whose rules are atomic rules {\"type\": \"rule\", \"field\": ..., \"operator\": ..., \"value\": ...} or nested groups, at most three levels deep. A bare array of atomic rules is read as an AND group.\n`field` is a contact column (email | firstName | lastName | status | source | createdAt | updatedAt), `tags`, or `properties.<key>` for a custom property; any other field is refused (400 lists.invalidRuleField). `operator` is one of EQUALS | NOT_EQUALS | CONTAINS | NOT_CONTAINS | STARTS_WITH | ENDS_WITH | GREATER_THAN | LESS_THAN | GREATER_THAN_OR_EQUAL | LESS_THAN_OR_EQUAL | IS_SET | IS_NOT_SET | IN | NOT_IN. contains, not_contains, starts_with and ends_with are case-insensitive; a contact column compares as its own type and a custom property as text. is_set and is_not_set take no value; in and not_in take an array. On `tags` only in and not_in (tag names) and is_set and is_not_set (any tag at all) are accepted.",
+            "description": "Who a dynamic list contains, evaluated every time it is read. Required when `type` is dynamic, cleared when it is static.\nA group is {\"type\": \"group\", \"logic\": AND | OR, \"rules\": [...]} whose rules are atomic rules {\"type\": \"rule\", \"field\": ..., \"operator\": ..., \"value\": ...} or nested groups, at most three levels deep. A bare array of atomic rules is read as an AND group.\n`field` is a contact column (email | firstName | lastName | status | source | createdAt | updatedAt), `tags`, or `properties.<key>` for a custom property; any other field is refused (400 lists.invalidRuleField). `operator` is one of EQUALS | NOT_EQUALS | CONTAINS | NOT_CONTAINS | STARTS_WITH | ENDS_WITH | GREATER_THAN | LESS_THAN | GREATER_THAN_OR_EQUAL | LESS_THAN_OR_EQUAL | IS_SET | IS_NOT_SET | IN | NOT_IN, in that spelling. CONTAINS, NOT_CONTAINS, STARTS_WITH and ENDS_WITH are case-insensitive; a contact column compares as its own type and a custom property as text. IS_SET and IS_NOT_SET take no value; IN and NOT_IN take a non-empty list, every other operator one value (400 lists.invalidRuleValue otherwise). On `status` and `source` only EQUALS, NOT_EQUALS, IN, NOT_IN, IS_SET and IS_NOT_SET are accepted (400 lists.invalidRuleOperator), with that column's own values (status: SUBSCRIBED | UNSUBSCRIBED | BOUNCED | COMPLAINED; source: MANUAL | IMPORT | API | FORM | SYNC; 400 lists.invalidRuleValue). On `tags` only IN and NOT_IN (tag names) and IS_SET and IS_NOT_SET (any tag at all) are accepted.",
             "additionalProperties": true,
             "example": {
               "type": "group",
@@ -6180,7 +6180,7 @@
                 {
                   "type": "rule",
                   "field": "tags",
-                  "operator": "in",
+                  "operator": "IN",
                   "value": [
                     "customer"
                   ]
@@ -6300,7 +6300,7 @@
           },
           "rules": {
             "type": "object",
-            "description": "Replaces the rules of a dynamic list. Who a dynamic list contains, evaluated every time it is read. Required when `type` is dynamic, cleared when it is static.\nA group is {\"type\": \"group\", \"logic\": AND | OR, \"rules\": [...]} whose rules are atomic rules {\"type\": \"rule\", \"field\": ..., \"operator\": ..., \"value\": ...} or nested groups, at most three levels deep. A bare array of atomic rules is read as an AND group.\n`field` is a contact column (email | firstName | lastName | status | source | createdAt | updatedAt), `tags`, or `properties.<key>` for a custom property; any other field is refused (400 lists.invalidRuleField). `operator` is one of EQUALS | NOT_EQUALS | CONTAINS | NOT_CONTAINS | STARTS_WITH | ENDS_WITH | GREATER_THAN | LESS_THAN | GREATER_THAN_OR_EQUAL | LESS_THAN_OR_EQUAL | IS_SET | IS_NOT_SET | IN | NOT_IN. contains, not_contains, starts_with and ends_with are case-insensitive; a contact column compares as its own type and a custom property as text. is_set and is_not_set take no value; in and not_in take an array. On `tags` only in and not_in (tag names) and is_set and is_not_set (any tag at all) are accepted.",
+            "description": "Replaces the rules of a dynamic list. Who a dynamic list contains, evaluated every time it is read. Required when `type` is dynamic, cleared when it is static.\nA group is {\"type\": \"group\", \"logic\": AND | OR, \"rules\": [...]} whose rules are atomic rules {\"type\": \"rule\", \"field\": ..., \"operator\": ..., \"value\": ...} or nested groups, at most three levels deep. A bare array of atomic rules is read as an AND group.\n`field` is a contact column (email | firstName | lastName | status | source | createdAt | updatedAt), `tags`, or `properties.<key>` for a custom property; any other field is refused (400 lists.invalidRuleField). `operator` is one of EQUALS | NOT_EQUALS | CONTAINS | NOT_CONTAINS | STARTS_WITH | ENDS_WITH | GREATER_THAN | LESS_THAN | GREATER_THAN_OR_EQUAL | LESS_THAN_OR_EQUAL | IS_SET | IS_NOT_SET | IN | NOT_IN, in that spelling. CONTAINS, NOT_CONTAINS, STARTS_WITH and ENDS_WITH are case-insensitive; a contact column compares as its own type and a custom property as text. IS_SET and IS_NOT_SET take no value; IN and NOT_IN take a non-empty list, every other operator one value (400 lists.invalidRuleValue otherwise). On `status` and `source` only EQUALS, NOT_EQUALS, IN, NOT_IN, IS_SET and IS_NOT_SET are accepted (400 lists.invalidRuleOperator), with that column's own values (status: SUBSCRIBED | UNSUBSCRIBED | BOUNCED | COMPLAINED; source: MANUAL | IMPORT | API | FORM | SYNC; 400 lists.invalidRuleValue). On `tags` only IN and NOT_IN (tag names) and IS_SET and IS_NOT_SET (any tag at all) are accepted.",
             "additionalProperties": true,
             "example": {
               "type": "group",
@@ -6315,7 +6315,7 @@
                 {
                   "type": "rule",
                   "field": "tags",
-                  "operator": "in",
+                  "operator": "IN",
                   "value": [
                     "customer"
                   ]
