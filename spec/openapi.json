@@ -5398,15 +5398,20 @@
             "format": "uuid",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "message": {
+          "reason": {
             "type": "string",
-            "example": "Already enrolled",
-            "description": "Why this contact was not enrolled, in our words: \"Contact not found\" (no such contact in the workspace), \"Already enrolled\" (an active or paused enrollment exists) or \"Contact is suppressed\"."
+            "enum": [
+              "CONTACT_NOT_FOUND",
+              "ALREADY_ENROLLED",
+              "CONTACT_SUPPRESSED"
+            ],
+            "example": "ALREADY_ENROLLED",
+            "description": "Why this contact was not enrolled: CONTACT_NOT_FOUND (no such contact in the workspace), ALREADY_ENROLLED (an active or paused enrollment exists), CONTACT_SUPPRESSED (the address is suppressed)."
           }
         },
         "required": [
           "contactId",
-          "message"
+          "reason"
         ]
       },
       "BulkEnrollResponse": {

@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.1
+
+Nothing in the SDK changed: every type and every call is what 1.0.0
+shipped, so upgrading needs no code change.
+
+API changes from later on 2026-11-09 (backend #181):
+
+- The API no longer reads the old lowercase spelling of an enum value: the
+  grace 1.0.0 described ended the same day. A lowercase `reason` in
+  `suppressions.add()` or `suppressions.list()` is now a `400`
+  `validationFailed` naming the allowed values, where the API used to
+  correct it. The SDK's types allow only the uppercase spelling, so typed
+  code never sent a lowercase one.
+- On routes the SDK does not wrap:
+  `POST /api/v1/sequences/{id}/enrollments/bulk` names why it skipped a
+  contact in `errors[].reason`, one of `CONTACT_NOT_FOUND`,
+  `ALREADY_ENROLLED` and `CONTACT_SUPPRESSED`, in place of the sentence in
+  `errors[].message`. A list rule or a sequence condition on a contact's
+  `status`, `source` or `screeningVerdict` must carry one of that field's
+  values, and a sequence trigger's `source` filter one of the `source`
+  values: anything else is a `400`, `lists.invalidRuleValue` or
+  `sequences.invalidStepConfig`.
+
+`spec/openapi.json` is the live document.
+
 ## 1.0.0
 
 The cleaned-up REST contract (backend #178), and the SDK's own breaks in
