@@ -8,7 +8,7 @@
  *   node scripts/gen-types.mjs           write src/generated.ts
  *   node scripts/gen-types.mjs --check   exit 1 when it is stale
  *
- * test/generated.test.ts runs the check, so CI fails on a stale file.
+ * test/contract.test.ts runs the check, so CI fails on a stale file.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -234,6 +234,17 @@ const jsdoc = (paragraphs, indent) => {
   ];
 };
 
+/**
+ * A number's bounds, which the document carries as metadata rather than in
+ * the description text (a `limit` says "Items per page" and `maximum: 100`).
+ */
+const boundTags = (schema) => {
+  const tags = [];
+  if (schema?.minimum !== undefined) tags.push(`@minimum ${schema.minimum}`);
+  if (schema?.maximum !== undefined) tags.push(`@maximum ${schema.maximum}`);
+  return tags;
+};
+
 const propertyDocs = (schema) => {
   const description =
     schema.description ??
@@ -243,6 +254,7 @@ const propertyDocs = (schema) => {
   if (schema.default !== undefined) {
     tags.push(`@default ${JSON.stringify(schema.default)}`);
   }
+  tags.push(...boundTags(schema));
   if (schema.deprecated === true) tags.push('@deprecated');
   return [description, tags.join('\n')];
 };
@@ -310,9 +322,12 @@ for (const operation of operations) {
           required: parameter.required === true,
           docs: [
             parameter.description,
-            parameter.schema?.default !== undefined
-              ? `@default ${JSON.stringify(parameter.schema.default)}`
-              : '',
+            [
+              ...(parameter.schema?.default !== undefined
+                ? [`@default ${JSON.stringify(parameter.schema.default)}`]
+                : []),
+              ...boundTags(parameter.schema),
+            ].join('\n'),
           ],
         })),
         '      ',

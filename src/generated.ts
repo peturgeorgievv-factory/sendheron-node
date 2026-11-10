@@ -948,12 +948,15 @@ export interface Routes {
        * Page number, zero-based
        *
        * @default 0
+       * @minimum 0
        */
       page?: number;
       /**
        * Items per page
        *
        * @default 50
+       * @minimum 1
+       * @maximum 100
        */
       limit?: number;
       /** Search by template name or subject (ILIKE) */
@@ -997,12 +1000,15 @@ export interface Routes {
        * Page number, zero-based
        *
        * @default 0
+       * @minimum 0
        */
       page?: number;
       /**
        * Items per page
        *
        * @default 50
+       * @minimum 1
+       * @maximum 100
        */
       limit?: number;
       /** Search by email (ILIKE) */
