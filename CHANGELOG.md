@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Nothing in the SDK's types or calls changed.
+
+- The doc comments on the `page` and `limit` options of `templates.list()`
+  and `suppressions.list()` follow the API document's new wording: `page`
+  is "Page number, zero-based" and `limit` is "Items per page".
+- On routes the SDK does not wrap (backend #184):
+  `GET /api/v1/sequences/{id}/step-stats` answers the list envelope
+  (`data`, `totalCount`, `page`, `limit`, `hasNextPage`) in place of a bare
+  array, and takes `page` and `limit`; a step in
+  `PUT /api/v1/sequences/{id}/graph` takes `positionX` and `positionY` in
+  place of `x` and `y`.
+
 ## 1.0.1
 
 Nothing in the SDK changed: every type and every call is what 1.0.0

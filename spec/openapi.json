@@ -93,10 +93,10 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (zero-based)",
+            "description": "Page number, zero-based",
             "schema": {
               "minimum": 0,
-              "example": 0,
+              "default": 0,
               "type": "number"
             }
           },
@@ -338,10 +338,10 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (zero-based)",
+            "description": "Page number, zero-based",
             "schema": {
               "minimum": 0,
-              "example": 0,
+              "default": 0,
               "type": "number"
             }
           },
@@ -422,10 +422,10 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (zero-based)",
+            "description": "Page number, zero-based",
             "schema": {
               "minimum": 0,
-              "example": 0,
+              "default": 0,
               "type": "number"
             }
           },
@@ -784,10 +784,10 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (zero-based)",
+            "description": "Page number, zero-based",
             "schema": {
               "minimum": 0,
-              "example": 0,
+              "default": 0,
               "type": "number"
             }
           },
@@ -943,10 +943,10 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (zero-based)",
+            "description": "Page number, zero-based",
             "schema": {
               "minimum": 0,
-              "example": 0,
+              "default": 0,
               "type": "number"
             }
           },
@@ -1312,6 +1312,7 @@
     },
     "/api/v1/sequences/{id}/step-stats": {
       "get": {
+        "description": "One row per step: executions, email metrics and condition splits. Paged like every list.",
         "operationId": "SequencesController_getSequenceStepStats",
         "parameters": [
           {
@@ -1322,18 +1323,55 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number, zero-based",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Per-step analytics (executions, email metrics, condition splits), one row per step",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepStatsResponse"
-                  }
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponse"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SequenceStepStatsResponse"
+                          }
+                        }
+                      },
+                      "required": [
+                        "data"
+                      ]
+                    }
+                  ]
                 }
               }
             }
@@ -1833,8 +1871,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -1843,8 +1882,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -2101,8 +2142,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -2111,8 +2153,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -2404,8 +2448,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -2414,8 +2459,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -2602,8 +2649,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -2612,8 +2660,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -3145,8 +3195,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -3155,8 +3206,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -3415,8 +3468,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -3425,8 +3479,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -3608,8 +3664,9 @@
             "name": "page",
             "required": false,
             "in": "query",
-            "description": "Page number (0-based)",
+            "description": "Page number, zero-based",
             "schema": {
+              "minimum": 0,
               "default": 0,
               "type": "number"
             }
@@ -3618,8 +3675,10 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "description": "Items per page (max 100)",
+            "description": "Items per page",
             "schema": {
+              "minimum": 1,
+              "maximum": 100,
               "default": 50,
               "type": "number"
             }
@@ -3903,7 +3962,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FormSignupAcceptedRestDto"
+                  "$ref": "#/components/schemas/FormSignupAcceptedResponse"
                 }
               }
             }
@@ -5069,11 +5128,11 @@
               "unit": "HOURS"
             }
           },
-          "x": {
+          "positionX": {
             "type": "number",
             "description": "Canvas X position."
           },
-          "y": {
+          "positionY": {
             "type": "number",
             "description": "Canvas Y position."
           }
@@ -8044,7 +8103,7 @@
           "ipAddress"
         ]
       },
-      "FormSignupAcceptedRestDto": {
+      "FormSignupAcceptedResponse": {
         "type": "object",
         "properties": {
           "status": {

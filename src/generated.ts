@@ -945,13 +945,13 @@ export interface Routes {
   'GET /api/v1/templates': {
     query: {
       /**
-       * Page number (0-based)
+       * Page number, zero-based
        *
        * @default 0
        */
       page?: number;
       /**
-       * Items per page (max 100)
+       * Items per page
        *
        * @default 50
        */
@@ -994,13 +994,13 @@ export interface Routes {
   'GET /api/v1/suppressions': {
     query: {
       /**
-       * Page number (0-based)
+       * Page number, zero-based
        *
        * @default 0
        */
       page?: number;
       /**
-       * Items per page (max 100)
+       * Items per page
        *
        * @default 50
        */
