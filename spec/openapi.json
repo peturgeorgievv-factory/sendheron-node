@@ -5028,7 +5028,7 @@
           },
           "triggerConfig": {
             "type": "object",
-            "description": "Keys depend on triggerType, and a key the trigger does not read is refused rather than stored: tagId (UUID of a tag in this workspace) for tag_added, listId (UUID) for list_added, eventName for event, an optional source filter for contact_created. Whether the trigger is complete is checked at activation, so a draft may omit them.",
+            "description": "Keys depend on triggerType, and a key the trigger does not read is refused rather than stored: tagId (UUID of a tag in this workspace) for TAG_ADDED, listId (UUID) for LIST_ADDED, eventName for EVENT, an optional source filter (a contact source value) for CONTACT_CREATED. Whether the trigger is complete is checked at activation, so a draft may omit them.",
             "additionalProperties": true,
             "example": {
               "tagId": "550e8400-e29b-41d4-a716-446655440000"
@@ -5063,10 +5063,10 @@
           },
           "config": {
             "type": "object",
-            "description": "Step configuration. The keys depend on `type`, and a key this step type does not read is REJECTED rather than stored: a config the worker cannot understand used to be accepted silently and simply never run.\n\nTRIGGER: `triggerType` (MANUAL | CONTACT_CREATED | LIST_ADDED | TAG_ADDED | EVENT | WEBHOOK), plus `tagId` (UUID) for tag_added, `listId` (UUID) for list_added, `eventName` for event, and an optional `source` filter for contact_created.\nSEND_EMAIL: `templateId` (UUID).\nDELAY: `duration` (positive number) and `unit` (MINUTES | HOURS | DAYS). A delay of one week is {\"duration\": 168, \"unit\": \"hours\"} or {\"duration\": 7, \"unit\": \"days\"}; there is no `days` key.\nCONDITION: `operator` (EQUALS | NOT_EQUALS | CONTAINS | NOT_CONTAINS | STARTS_WITH | ENDS_WITH | IS_SET | IS_NOT_SET | GREATER_THAN | LESS_THAN | HAS_TAG | NOT_HAS_TAG), `field` and `value`. `field` is a contact column (email, firstName, lastName, status) or a custom property key, compared as text; greater_than and less_than compare as numbers. is_set and is_not_set take no `value`. has_tag and not_has_tag take the tag UUID as `value` and read no `field`.\nACTION: `actionType` (ADD_TAG | REMOVE_TAG | UPDATE_PROPERTY | SEND_WEBHOOK), plus `tagId` or `tagName` for add_tag and remove_tag, `properties` (object) for update_property, `webhookUrl` (https) for send_webhook.\n\nValues are validated here; whether a step is COMPLETE is checked at activation, so a draft may still omit required keys.",
+            "description": "Step configuration. The keys depend on `type`, and a key this step type does not read is REJECTED rather than stored: a config the worker cannot understand used to be accepted silently and simply never run.\n\nTRIGGER: `triggerType` (MANUAL | CONTACT_CREATED | LIST_ADDED | TAG_ADDED | EVENT | WEBHOOK), plus `tagId` (UUID) for TAG_ADDED, `listId` (UUID) for LIST_ADDED, `eventName` for EVENT, and an optional `source` filter (a contact source value) for CONTACT_CREATED.\nSEND_EMAIL: `templateId` (UUID).\nDELAY: `duration` (positive number) and `unit` (MINUTES | HOURS | DAYS). A delay of one week is {\"duration\": 168, \"unit\": \"HOURS\"} or {\"duration\": 7, \"unit\": \"DAYS\"}; there is no `days` key.\nCONDITION: `operator` (EQUALS | NOT_EQUALS | CONTAINS | NOT_CONTAINS | STARTS_WITH | ENDS_WITH | IS_SET | IS_NOT_SET | GREATER_THAN | LESS_THAN | HAS_TAG | NOT_HAS_TAG), `field` and `value`. `field` is a contact column (email, firstName, lastName, status) or a custom property key, compared as text; GREATER_THAN and LESS_THAN compare as numbers. IS_SET and IS_NOT_SET take no `value`. HAS_TAG and NOT_HAS_TAG take the tag UUID as `value` and read no `field`.\nACTION: `actionType` (ADD_TAG | REMOVE_TAG | UPDATE_PROPERTY | SEND_WEBHOOK), plus `tagId` or `tagName` for ADD_TAG and REMOVE_TAG, `properties` (object) for UPDATE_PROPERTY, `webhookUrl` (https) for SEND_WEBHOOK.\n\nValues are validated here; whether a step is COMPLETE is checked at activation, so a draft may still omit required keys.",
             "example": {
               "duration": 168,
-              "unit": "hours"
+              "unit": "HOURS"
             }
           },
           "x": {
@@ -5713,7 +5713,7 @@
           },
           "triggerConfig": {
             "type": "object",
-            "description": "Keys depend on triggerType, and a key the trigger does not read is refused rather than stored: tagId (UUID of a tag in this workspace) for tag_added, listId (UUID) for list_added, eventName for event, an optional source filter for contact_created. Whether the trigger is complete is checked at activation, so a draft may omit them.",
+            "description": "Keys depend on triggerType, and a key the trigger does not read is refused rather than stored: tagId (UUID of a tag in this workspace) for TAG_ADDED, listId (UUID) for LIST_ADDED, eventName for EVENT, an optional source filter (a contact source value) for CONTACT_CREATED. Whether the trigger is complete is checked at activation, so a draft may omit them.",
             "additionalProperties": true
           }
         }
@@ -6157,7 +6157,7 @@
           },
           "type": {
             "type": "string",
-            "description": "static: members are added and removed explicitly, and adding one fires the list_added sequence trigger. dynamic: a segment whose members are whoever matches `rules` when it is read; nothing is ever added to it, so list_added never fires for it.",
+            "description": "STATIC: members are added and removed explicitly, and adding one fires the LIST_ADDED sequence trigger. DYNAMIC: a segment whose members are whoever matches `rules` when it is read; nothing is ever added to it, so LIST_ADDED never fires for it.",
             "enum": [
               "STATIC",
               "DYNAMIC"
@@ -6292,7 +6292,7 @@
           },
           "type": {
             "type": "string",
-            "description": "static: members are added and removed explicitly, and adding one fires the list_added sequence trigger. dynamic: a segment whose members are whoever matches `rules` when it is read; nothing is ever added to it, so list_added never fires for it. Switching a dynamic list to static drops its rules and starts it empty; switching a static list to dynamic needs `rules` in the same request.",
+            "description": "STATIC: members are added and removed explicitly, and adding one fires the LIST_ADDED sequence trigger. DYNAMIC: a segment whose members are whoever matches `rules` when it is read; nothing is ever added to it, so LIST_ADDED never fires for it. Switching a dynamic list to static drops its rules and starts it empty; switching a static list to dynamic needs `rules` in the same request.",
             "enum": [
               "STATIC",
               "DYNAMIC"
