@@ -16,6 +16,10 @@ Nothing in the SDK's types or calls changed.
   array, and takes `page` and `limit`; a step in
   `PUT /api/v1/sequences/{id}/graph` takes `positionX` and `positionY` in
   place of `x` and `y`.
+- On a route the SDK does not wrap (backend #185):
+  `GET /api/v1/sequences/{id}/enrollments` takes an optional `term`, which
+  keeps the enrollments whose contact's email, first name or last name
+  contains it, ignoring case.
 
 ## 1.0.1
 

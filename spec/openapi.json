@@ -978,6 +978,15 @@
                 "CANCELLED"
               ]
             }
+          },
+          {
+            "name": "term",
+            "required": false,
+            "in": "query",
+            "description": "Search by the contact's email, first name or last name (ILIKE)",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
