@@ -945,15 +945,18 @@ export interface Routes {
   'GET /api/v1/templates': {
     query: {
       /**
-       * Page number (0-based)
+       * Page number, zero-based
        *
        * @default 0
+       * @minimum 0
        */
       page?: number;
       /**
-       * Items per page (max 100)
+       * Items per page
        *
        * @default 50
+       * @minimum 1
+       * @maximum 100
        */
       limit?: number;
       /** Search by template name or subject (ILIKE) */
@@ -994,15 +997,18 @@ export interface Routes {
   'GET /api/v1/suppressions': {
     query: {
       /**
-       * Page number (0-based)
+       * Page number, zero-based
        *
        * @default 0
+       * @minimum 0
        */
       page?: number;
       /**
-       * Items per page (max 100)
+       * Items per page
        *
        * @default 50
+       * @minimum 1
+       * @maximum 100
        */
       limit?: number;
       /** Search by email (ILIKE) */
