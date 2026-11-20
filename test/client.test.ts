@@ -885,6 +885,32 @@ describe('edge cases', () => {
     }
   });
 
+  it('surfaces a template still in use as a typed 409 and never retries it', async () => {
+    server = await startMockServer([
+      {
+        status: 409,
+        body: {
+          statusCode: 409,
+          message: 'templates.inUse',
+          error: 'CONFLICT',
+          description:
+            'Still in use: "Welcome" (sequence "Onboarding"). Nothing was deleted.',
+        },
+      },
+      { status: 200, body: { deleted: true } },
+    ]);
+
+    const { data, error } = await build().templates.remove('t-1');
+
+    expect(data).toBeNull();
+    expect(error!.kind).toBe('api');
+    expect(error!.statusCode).toBe(409);
+    expect(error!.code).toBe('templates.inUse');
+    expect(error!.description).toContain('sequence "Onboarding"');
+    expect(error!.retryable).toBe(false);
+    expect(server.requests).toHaveLength(1);
+  });
+
   it('sendBulk posts the audience payload and returns the batch result', async () => {
     server = await startMockServer([
       {

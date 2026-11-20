@@ -20,6 +20,23 @@ Nothing in the SDK's types or calls changed.
   `GET /api/v1/sequences/{id}/enrollments` takes an optional `term`, which
   keeps the enrollments whose contact's email, first name or last name
   contains it, ignoring case.
+- `templates.remove()` refuses a template that is still in use (backend
+  #191): when an active sequence has a step that sends it, or a campaign
+  that is scheduled, sending or paused uses it, the call answers a `409`
+  `templates.inUse` and nothing is deleted. `error.retryable` is false,
+  and `error.description` names each sequence and campaign that sends the
+  template. Such a delete used to go through: the sequence step kept
+  pointing at the deleted template, and the campaign lost its template.
+  The doc comment on `remove()` and the README say so.
+- On a route the SDK does not wrap (backend #191):
+  `DELETE /api/v1/tags/{id}` refuses a tag that an active sequence uses
+  (as its trigger, in a step that adds or removes it, or in a branch on
+  it) with a `409` `tags.inUse`, the same shape as `templates.inUse`. A
+  deleted tag also leaves every signup form that carried it.
+  `PATCH /api/v1/sequences/{id}/status` still answers a `400` when it
+  activates a sequence whose tag or template was deleted, but its code is
+  now `sequences.tagDeleted` or `sequences.templateDeleted` in place of
+  `sequences.incompleteStepConfig`.
 
 ## 1.0.1
 

@@ -2100,7 +2100,7 @@
         ]
       },
       "delete": {
-        "description": "Removes the tag from every contact and template that carries it; the contacts stay. Sequence steps and triggers that referenced the tag are not edited, so a TAG_ADDED trigger for it never fires again, and re-activating a paused sequence that names it is refused until the reference is repaired.",
+        "description": "Removes the tag from every contact, template and signup form that carries it; the contacts stay. A tag an active sequence uses is not deleted. Draft and paused sequences are not edited: activating one that names a deleted tag is refused until the reference is repaired.",
         "operationId": "TagsController_deleteTag",
         "parameters": [
           {
@@ -2129,6 +2129,9 @@
           },
           "404": {
             "description": "Tag not found"
+          },
+          "409": {
+            "description": "An active sequence is triggered by this tag, adds or removes it in a step, or branches on it (`tags.inUse`). `description` names them."
           }
         },
         "security": [
@@ -2927,6 +2930,9 @@
           },
           "404": {
             "description": "Template not found"
+          },
+          "409": {
+            "description": "An active sequence, or a campaign that is scheduled, sending or paused, still sends this template (`templates.inUse`). `description` names them."
           }
         },
         "security": [

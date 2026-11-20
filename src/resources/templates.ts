@@ -62,7 +62,12 @@ export class Templates {
     );
   }
 
-  /** Answers `{ deleted: true }`. */
+  /**
+   * Answers `{ deleted: true }`. A template that an active sequence, or a
+   * campaign that is scheduled, sending or paused, still sends is not
+   * deleted: that is a 409 `templates.inUse`, never retryable, and
+   * `error.description` names each sequence and campaign that sends it.
+   */
   remove(
     id: string,
     options?: RequestOptions,

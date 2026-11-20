@@ -297,6 +297,10 @@ Every list answers one envelope, `{ data, totalCount, page, limit,
 hasNextPage }` (`PaginatedResponse<T>`): `page` is the zero-based page you
 asked for, counts are never null, and `limit` defaults to 50 and stops at
 100. Every delete answers `{ deleted: true }` and takes no body.
+`templates.remove()` refuses a template that an active sequence, or a
+campaign that is scheduled, sending or paused, still sends: a `409`
+`templates.inUse`, not retryable, with `error.description` naming what
+sends it. Nothing is deleted.
 
 Every request and response type is generated from the API document
 (`SendRecordResponse`, `TemplateResponse`, `SuppressionEntryResponse`,
